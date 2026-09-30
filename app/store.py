@@ -175,25 +175,59 @@ class Store:
 
     # --- consultation pour le tableau de bord ------------------------------
 
-    def recent_requests(self, limit: int) -> list[dict]:
+    def recent_requests(self, limit: int, domain: str | None = None) -> list[dict]:
         with self._lock:
             rows = self._db.execute(
                 """SELECT r.ts, r.request_id, r.question, r.domain, r.outcome, r.latency_ms, r.cost_eur,
                           COALESCE(k.label, '?') AS key_label, COALESCE(r.channel, 'http') AS channel,
-                          r.client, r.context, v.answer, v.confidence,
-                          f.useful AS feedback_useful, f.issue AS feedback_issue
+                          r.client, r.context, v.answer, v.confidence, v.sources,
+                          f.useful AS feedback_useful, f.issue AS feedback_issue, f.comment AS feedback_comment
                    FROM requests r LEFT JOIN api_keys k ON k.key = r.api_key
                    LEFT JOIN answer_versions v ON v.id = r.answer_version_id
                    LEFT JOIN feedback f ON f.request_id = r.request_id
-                   ORDER BY r.id DESC LIMIT ?""",
-                (limit,),
+                   WHERE :domain IS NULL OR r.domain = :domain
+                   ORDER BY r.id DESC LIMIT :limit""",
+                {"domain": domain, "limit": limit},
             ).fetchall()
-        return [dict(r) for r in rows]
+        return [{**dict(r), "sources": json.loads(r["sources"]) if r["sources"] else []} for r in rows]
 
-    def list_answers(self, limit: int) -> list[dict]:
+    def list_answers(self, limit: int, domain: str | None = None) -> list[dict]:
         with self._lock:
-            rows = self._db.execute("SELECT * FROM answers ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()
+            rows = self._db.execute(
+                "SELECT * FROM answers WHERE :domain IS NULL OR domain = :domain ORDER BY created_at DESC LIMIT :limit",
+                {"domain": domain, "limit": limit},
+            ).fetchall()
         return [{**asdict(_to_answer(r)), "hits": r["hits"]} for r in rows]
+
+    def domain_overview(self, since: float, now: float) -> dict[str, dict]:
+        """Par domaine : requêtes (depuis `since`), réponses en mémoire et retours des agents."""
+        with self._lock:
+            requests = self._db.execute(
+                """SELECT domain, COUNT(*) AS requests, COUNT(DISTINCT key) AS distinct_questions,
+                          SUM(outcome = 'hit') AS hit, SUM(outcome = 'miss') AS miss,
+                          SUM(outcome = 'unanswered') AS unanswered, COALESCE(SUM(cost_eur), 0) AS cost_eur,
+                          MAX(ts) AS last_ts
+                   FROM requests WHERE ts >= ? AND domain IS NOT NULL GROUP BY domain""",
+                (since,),
+            ).fetchall()
+            answers = self._db.execute(
+                """SELECT domain, COUNT(*) AS answers, SUM(expires_at > ?) AS fresh_answers,
+                          COALESCE(SUM(hits), 0) AS served
+                   FROM answers GROUP BY domain""",
+                (now,),
+            ).fetchall()
+            feedback = self._db.execute(
+                """SELECT r.domain, COUNT(*) AS feedback, COALESCE(SUM(f.useful), 0) AS useful
+                   FROM feedback f JOIN requests r ON r.request_id = f.request_id
+                   WHERE f.ts >= ? AND r.domain IS NOT NULL GROUP BY r.domain""",
+                (since,),
+            ).fetchall()
+        out: dict[str, dict] = {}
+        for rows in (requests, answers, feedback):
+            for r in rows:
+                values = dict(r)
+                out.setdefault(values.pop("domain"), {}).update(values)
+        return out
 
     # --- journal et statistiques -----------------------------------------
 
@@ -255,19 +289,22 @@ class Store:
             self._db.commit()
         return True
 
-    def list_feedback(self, limit: int) -> list[dict]:
+    def list_feedback(self, limit: int, domain: str | None = None) -> list[dict]:
         with self._lock:
             rows = self._db.execute(
                 """SELECT f.ts, f.useful, f.issue, f.comment, r.question, r.domain, r.client, r.request_id,
                           v.answer
                    FROM feedback f JOIN requests r ON r.request_id = f.request_id
                    LEFT JOIN answer_versions v ON v.id = r.answer_version_id
-                   ORDER BY f.ts DESC LIMIT ?""",
-                (limit,),
+                   WHERE :domain IS NULL OR r.domain = :domain
+                   ORDER BY f.ts DESC LIMIT :limit""",
+                {"domain": domain, "limit": limit},
             ).fetchall()
         return [{**dict(r), "useful": bool(r["useful"])} for r in rows]
 
-    def timeseries(self, *, since: float, bucket_seconds: int, tz_offset_seconds: int = 0) -> list[dict]:
+    def timeseries(
+        self, *, since: float, bucket_seconds: int, tz_offset_seconds: int = 0, domain: str | None = None
+    ) -> list[dict]:
         """Requêtes par tranche de temps (heure ou jour, alignée sur le fuseau du lecteur)."""
         with self._lock:
             rows = self._db.execute(
@@ -276,8 +313,9 @@ class Store:
                           SUM(outcome = 'unanswered') AS unanswered,
                           COALESCE(SUM(cost_eur), 0) AS cost_eur,
                           CAST(AVG(latency_ms) AS INTEGER) AS avg_latency_ms
-                   FROM requests WHERE ts >= :since GROUP BY 1 ORDER BY 1""",
-                {"tz": tz_offset_seconds, "b": bucket_seconds, "since": since},
+                   FROM requests WHERE ts >= :since AND (:domain IS NULL OR domain = :domain)
+                   GROUP BY 1 ORDER BY 1""",
+                {"tz": tz_offset_seconds, "b": bucket_seconds, "since": since, "domain": domain},
             ).fetchall()
         return [dict(r) for r in rows]
 
@@ -291,13 +329,22 @@ class Store:
             self._db.execute("DELETE FROM requests WHERE ts < ?", (cutoff,))
             self._db.commit()
 
-    def stats(self, price_per_request_eur: float, since: float = 0.0) -> dict:
-        """Statistiques sur les requêtes depuis `since` (horodatage Unix ; 0 = depuis le début)."""
+    def stats(self, price_per_request_eur: float, since: float = 0.0, domain: str | None = None) -> dict:
+        """Statistiques sur les requêtes depuis `since` (horodatage Unix ; 0 = depuis le début),
+        pour un seul domaine si `domain` est donné."""
         with self._lock:
 
             def q(sql):
-                # Chaque « ? » de ces requêtes est la borne de début de période.
-                return self._db.execute(sql, (since,) * sql.count("?"))
+                # Chaque sous-requête « depuis ? » est restreinte à la période et, au besoin, au domaine.
+                sql = sql.replace(
+                    "(SELECT * FROM requests WHERE ts >= ?)",
+                    "(SELECT * FROM requests WHERE ts >= :since AND (:domain IS NULL OR domain = :domain))",
+                ).replace(
+                    "(SELECT * FROM feedback WHERE ts >= ?)",
+                    """(SELECT f.* FROM feedback f JOIN requests r ON r.request_id = f.request_id
+                        WHERE f.ts >= :since AND (:domain IS NULL OR r.domain = :domain))""",
+                )
+                return self._db.execute(sql, {"since": since, "domain": domain})
 
             total = q("SELECT COUNT(*) FROM (SELECT * FROM requests WHERE ts >= ?) AS requests").fetchone()[0]
             distinct = q(

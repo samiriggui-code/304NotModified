@@ -236,6 +236,32 @@ def test_timeseries_and_period_filter(setup):
     assert client.get("/internal/timeseries").status_code == 403
 
 
+def test_dashboard_data_by_domain(setup):
+    client, _, headers = setup
+    client.post("/v1/answer", json={"question": "Date de la réforme ?", "domain": "facturation"}, headers=headers)
+    client.post("/v1/answer", json={"question": "date de la reforme", "domain": "facturation"}, headers=headers)
+    client.post("/v1/answer", json={"question": "Audit Qualiopi ?", "domain": "formation"}, headers=headers)
+
+    def get(path):
+        return client.get(path, headers=ADMIN).json()
+
+    assert get("/internal/stats?domain=facturation")["requests"] == 2
+    assert get("/internal/stats?domain=formation")["requests"] == 1
+    assert sum(b["hit"] + b["miss"] for b in get("/internal/timeseries?domain=facturation")) == 2
+    assert {r["domain"] for r in get("/internal/requests?domain=formation")} == {"formation"}
+    assert [a["domain"] for a in get("/internal/answers?domain=facturation")] == ["facturation"]
+    assert get("/internal/requests?domain=facturation")[0]["sources"][0]["url"] == "https://exemple.org/source"
+
+    domains = {d["domain"]: d for d in get("/internal/domains")}
+    assert set(domains) == set(config.DOMAIN_TTL_SECONDS)
+    f = domains["facturation"]
+    assert f["label"] == "Facturation électronique" and f["specialty"] is True
+    assert (f["requests"], f["hit"], f["miss"], f["answers"], f["fresh_answers"]) == (2, 1, 1, 1, 1)
+    assert f["cache_hit_rate"] == 0.5
+    assert domains["prix"]["requests"] == 0 and domains["prix"]["specialty"] is False
+    assert client.get("/internal/domains").status_code == 403
+
+
 def test_internal_routes_are_hidden_from_public_docs(setup):
     client, _, _ = setup
     paths = client.get("/openapi.json").json()["paths"]

@@ -23,6 +23,22 @@ DOMAIN_TTL_SECONDS = {
 }
 DEFAULT_DOMAIN = "general"
 
+# Nom lisible et description courte de chaque domaine (tableau de bord, documentation).
+DOMAIN_LABELS = {
+    "facturation": ("Facturation électronique", "Réglementation, formats, plateformes agréées, Peppol, e-reporting"),
+    "formation": ("Formation professionnelle", "Qualiopi, CPF et EDOF, OPCO, RNCP"),
+    "impots": ("Impôts", "Impôt sur le revenu, TVA, impôt sur les sociétés, dates et démarches"),
+    "finances": ("Finances", "Banque, épargne, crédit, assurance, taux réglementés"),
+    "vie_quotidienne": ("Vie quotidienne", "Démarches, aides, droits sociaux, logement, papiers"),
+    "droit": ("Droit", "Droit en vigueur : codes, lois, jurisprudence de principe"),
+    "reglementation": ("Réglementation", "Lois, normes et référentiels applicables aux entreprises"),
+    "logiciel": ("Logiciel", "Versions, API, bibliothèques"),
+    "entreprise": ("Entreprises", "Coordonnées, horaires, activité d'une entreprise"),
+    "prix": ("Prix", "Prix, disponibilité, stocks"),
+    "actualite": ("Actualité", "Événements récents"),
+    "general": ("Général", "Questions hors spécialité"),
+}
+
 # Consignes de recherche propres à un domaine, ajoutées à la consigne générale du chercheur.
 # Spécialités (voir docs/VISION.md, §12) : facturation électronique, formation professionnelle,
 # impôts, finances, vie quotidienne, droit, réglementation, logiciel. Les clients sont des agents IA :

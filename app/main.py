@@ -207,38 +207,77 @@ def create_app(store: Store | None = None, resolver: Resolver | None = None) -> 
     def create_key(body: KeyRequest):
         return {"api_key": store.create_key(body.label, body.quota), "quota": body.quota}
 
+    # Filtre facultatif par domaine, commun aux routes du tableau de bord.
+    DomainFilter = Query(default=None, max_length=40)
+
     @app.get("/internal/stats", dependencies=[Depends(require_admin)], include_in_schema=False)
-    def stats(days: float | None = Query(default=None, gt=0, le=3650)):
+    def stats(days: float | None = Query(default=None, gt=0, le=3650), domain: str | None = DomainFilter):
         since = time.time() - days * 86400 if days else 0.0
-        return store.stats(config.PRICE_PER_REQUEST_EUR, since=since)
+        return store.stats(config.PRICE_PER_REQUEST_EUR, since=since, domain=domain)
 
     @app.get("/internal/timeseries", dependencies=[Depends(require_admin)], include_in_schema=False)
     def timeseries(
         days: float = Query(default=7, gt=0, le=3650),
         bucket: Literal["hour", "day"] = "day",
         tz_offset_min: int = Query(default=0, ge=-14 * 60, le=14 * 60),
+        domain: str | None = DomainFilter,
     ):
         return store.timeseries(
             since=time.time() - days * 86400,
             bucket_seconds=3600 if bucket == "hour" else 86400,
             tz_offset_seconds=tz_offset_min * 60,
+            domain=domain,
         )
+
+    @app.get("/internal/domains", dependencies=[Depends(require_admin)], include_in_schema=False)
+    def domains(days: float | None = Query(default=None, gt=0, le=3650)):
+        now = time.time()
+        overview = store.domain_overview(now - days * 86400 if days else 0.0, now)
+        rows = []
+        for domain, ttl in config.DOMAIN_TTL_SECONDS.items():
+            label, description = config.DOMAIN_LABELS.get(domain, (domain, ""))
+            o = overview.get(domain, {})
+            hit, miss = o.get("hit") or 0, o.get("miss") or 0
+            rows.append(
+                {
+                    "domain": domain,
+                    "label": label,
+                    "description": description,
+                    "ttl_seconds": ttl,
+                    # Spécialité : le chercheur a des consignes et des sources officielles propres au domaine.
+                    "specialty": domain in config.DOMAIN_GUIDANCE,
+                    "requests": o.get("requests") or 0,
+                    "distinct_questions": o.get("distinct_questions") or 0,
+                    "hit": hit,
+                    "miss": miss,
+                    "unanswered": o.get("unanswered") or 0,
+                    "cache_hit_rate": round(hit / (hit + miss), 3) if hit + miss else 0.0,
+                    "cost_eur": round(o.get("cost_eur") or 0.0, 4),
+                    "last_ts": o.get("last_ts"),
+                    "answers": o.get("answers") or 0,
+                    "fresh_answers": o.get("fresh_answers") or 0,
+                    "served": o.get("served") or 0,
+                    "feedback": o.get("feedback") or 0,
+                    "useful": o.get("useful") or 0,
+                }
+            )
+        return sorted(rows, key=lambda r: (not r["specialty"], -r["requests"], r["label"]))
 
     @app.get("/internal/keys", dependencies=[Depends(require_admin)], include_in_schema=False)
     def list_keys():
         return store.list_keys()
 
     @app.get("/internal/requests", dependencies=[Depends(require_admin)], include_in_schema=False)
-    def recent_requests(limit: int = Query(default=50, ge=1, le=500)):
-        return store.recent_requests(limit)
+    def recent_requests(limit: int = Query(default=50, ge=1, le=500), domain: str | None = DomainFilter):
+        return store.recent_requests(limit, domain)
 
     @app.get("/internal/feedback", dependencies=[Depends(require_admin)], include_in_schema=False)
-    def list_feedback(limit: int = Query(default=50, ge=1, le=500)):
-        return store.list_feedback(limit)
+    def list_feedback(limit: int = Query(default=50, ge=1, le=500), domain: str | None = DomainFilter):
+        return store.list_feedback(limit, domain)
 
     @app.get("/internal/answers", dependencies=[Depends(require_admin)], include_in_schema=False)
-    def list_answers(limit: int = Query(default=50, ge=1, le=500)):
-        return store.list_answers(limit)
+    def list_answers(limit: int = Query(default=50, ge=1, le=500), domain: str | None = DomainFilter):
+        return store.list_answers(limit, domain)
 
     # Connexion du tableau de bord (front Next.js séparé, voir admin/). Les routes /internal/* ne sont
     # pas exposées sur Internet : Traefik ne les route pas, seul le front, sur le serveur, les appelle.

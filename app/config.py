@@ -173,6 +173,12 @@ OUTPUT_USD_PER_MTOK = float(os.environ.get("OUTPUT_USD_PER_MTOK", "20"))
 WEB_SEARCH_USD_PER_1000 = float(os.environ.get("WEB_SEARCH_USD_PER_1000", "10"))
 USD_TO_EUR = float(os.environ.get("USD_TO_EUR", "0.92"))
 
+# Moteur de secours par OpenRouter (utilisé quand ANTHROPIC_API_KEY est absente et OPENROUTER_API_KEY
+# présente). Modèle et tarifs vérifiés sur openrouter.ai le 30/09/2026 : claude-sonnet-5.5,
+# 2 $ / 10 $ par million de jetons, 0,01 $ par recherche web. Le coût réel est lu dans chaque réponse.
+OPENROUTER_MODEL = os.environ.get("OPENROUTER_MODEL", "anthropic/claude-sonnet-5.5")
+OPENROUTER_WEB_MAX_RESULTS = int(os.environ.get("OPENROUTER_WEB_MAX_RESULTS", "5"))
+
 # Moteur : délai maximal d'une recherche chez le fournisseur (sans relance automatique), nombre de
 # recherches payantes simultanées, et attente maximale d'une place avant de répondre « busy ».
 # Le client MCP attend 120 s : attente + recherche doivent rester en dessous.

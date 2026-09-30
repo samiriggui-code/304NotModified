@@ -18,7 +18,7 @@ from .aliases import CONTEXT_ALIASES, DOMAIN_ALIASES, QUESTION_ALIASES
 from .engine import SearchCoordinator
 from .normalize import question_key
 from .public import home_page, llms_text
-from .resolver import REASONS, TRANSIENT_REASONS, ClaudeResolver, NullResolver, Resolver
+from .resolver import REASONS, TRANSIENT_REASONS, ClaudeResolver, NullResolver, OpenRouterResolver, Resolver
 from .store import CachedAnswer, Store
 
 log = logging.getLogger("304notmodified")
@@ -124,11 +124,21 @@ class DailyCounter:
         return self._counts[who]
 
 
+def default_resolver() -> Resolver:
+    """Moteur de recherche selon les clés présentes : Anthropic d'abord, OpenRouter en secours,
+    sinon aucun (les questions sont seulement enregistrées)."""
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        return ClaudeResolver()
+    if os.environ.get("OPENROUTER_API_KEY"):
+        return OpenRouterResolver(os.environ["OPENROUTER_API_KEY"])
+    return NullResolver()
+
+
 def create_app(store: Store | None = None, resolver: Resolver | None = None) -> FastAPI:
     store = store or Store(config.DB_PATH)
     store.purge_older_than(config.LOG_RETENTION_DAYS)
     if resolver is None:
-        resolver = ClaudeResolver() if os.environ.get("ANTHROPIC_API_KEY") else NullResolver()
+        resolver = default_resolver()
 
     app = FastAPI(
         title="304NotModified",

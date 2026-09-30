@@ -10,6 +10,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Protocol
 
+import httpx
+
 from . import config
 
 DOMAINS = sorted(config.DOMAIN_TTL_SECONDS)
@@ -125,28 +127,88 @@ class ClaudeResolver:
             return Resolution(None, domain_hint or config.DEFAULT_DOMAIN, 0.0, cost_eur=cost, reason="refused")
 
         text = "".join(b.text for b in response.content if b.type == "text")
-        parsed = _parse_final_json(text)
-        if parsed is None:
-            return Resolution(None, domain_hint or config.DEFAULT_DOMAIN, 0.0, cost_eur=cost, reason="parse_error")
+        return _resolution_from_text(text, _citation_sources(response.content), domain_hint, cost)
 
-        domain = parsed.get("domain")
-        if domain_hint in config.DOMAIN_TTL_SECONDS:
-            domain = domain_hint
-        elif domain not in config.DOMAIN_TTL_SECONDS:
-            domain = config.DEFAULT_DOMAIN
 
-        sources = _merge_sources(parsed.get("sources") or [], _citation_sources(response.content))
+class OpenRouterResolver:
+    """Recherche via OpenRouter (API compatible OpenAI) et son plugin « web ».
+
+    Avec un modèle Anthropic, OpenRouter emploie la recherche web native d'Anthropic ; les pages
+    consultées reviennent en annotations « url_citation » (documentation OpenRouter, septembre 2026).
+    Mêmes exigences que le moteur Claude : JSON final, au moins une source vérifiable, sinon abstention.
+    Aucune relance automatique ; délai maximal explicite ; coût réel lu dans usage.cost (dollars).
+    """
+
+    URL = "https://openrouter.ai/api/v1/chat/completions"
+
+    def __init__(self, api_key: str, http: httpx.Client | None = None):
+        self._http = http or httpx.Client(timeout=config.PROVIDER_TIMEOUT_SECONDS)
+        self._headers = {
+            "Authorization": f"Bearer {api_key}",
+            # Identification facultative de l'application auprès d'OpenRouter.
+            "HTTP-Referer": config.PUBLIC_URL,
+            "X-Title": "304NotModified",
+        }
+
+    def resolve(self, question: str, domain_hint: str | None) -> Resolution:
+        user = question if not domain_hint else f"[domaine indiqué : {domain_hint}]\n{question}"
+        body = {
+            "model": config.OPENROUTER_MODEL,
+            "messages": [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": user}],
+            "plugins": [{"id": "web", "max_results": config.OPENROUTER_WEB_MAX_RESULTS}],
+            "max_tokens": 4000,
+        }
         try:
-            confidence = min(max(float(parsed.get("confidence") or 0.0), 0.0), 1.0)
-        except (TypeError, ValueError):
-            confidence = 0.0
-        answer = parsed.get("answer")
-        if not answer:
-            return Resolution(None, domain, 0.0, cost_eur=cost, reason="no_reliable_answer")
-        if not sources:
-            # Une réponse sans source n'est jamais mise en cache.
-            return Resolution(None, domain, 0.0, cost_eur=cost, reason="no_source")
-        return Resolution(str(answer), domain, confidence, sources, cost)
+            response = self._http.post(self.URL, json=body, headers=self._headers)
+        except httpx.TimeoutException as exc:
+            raise ProviderTimeout(type(exc).__name__) from exc
+        except httpx.HTTPError as exc:
+            raise ProviderError(type(exc).__name__) from exc
+        if response.status_code != 200:
+            # 402 : crédit épuisé ; 429 : limite ; 5xx : panne. Le détail reste dans le journal du serveur.
+            raise ProviderError(f"OpenRouter HTTP {response.status_code}")
+        try:
+            data = response.json()
+            choice = data["choices"][0]
+            message = choice.get("message") or {}
+        except (ValueError, KeyError, IndexError, TypeError) as exc:
+            raise ProviderError("réponse OpenRouter illisible") from exc
+
+        cost = float((data.get("usage") or {}).get("cost") or 0.0) * config.USD_TO_EUR
+        if choice.get("finish_reason") == "content_filter":
+            return Resolution(None, domain_hint or config.DEFAULT_DOMAIN, 0.0, cost_eur=cost, reason="refused")
+        citations = [
+            {"url": a["url_citation"].get("url"), "title": a["url_citation"].get("title") or ""}
+            for a in message.get("annotations") or []
+            if isinstance(a, dict) and a.get("type") == "url_citation" and isinstance(a.get("url_citation"), dict)
+        ]
+        return _resolution_from_text(message.get("content") or "", citations, domain_hint, cost)
+
+
+def _resolution_from_text(text: str, citations: list[dict], domain_hint: str | None, cost: float) -> Resolution:
+    """Règles communes à tous les moteurs : JSON final, domaine connu, au moins une source vérifiable."""
+    parsed = _parse_final_json(text)
+    if parsed is None:
+        return Resolution(None, domain_hint or config.DEFAULT_DOMAIN, 0.0, cost_eur=cost, reason="parse_error")
+
+    domain = parsed.get("domain")
+    if domain_hint in config.DOMAIN_TTL_SECONDS:
+        domain = domain_hint
+    elif domain not in config.DOMAIN_TTL_SECONDS:
+        domain = config.DEFAULT_DOMAIN
+
+    sources = _merge_sources(parsed.get("sources") or [], citations)
+    try:
+        confidence = min(max(float(parsed.get("confidence") or 0.0), 0.0), 1.0)
+    except (TypeError, ValueError):
+        confidence = 0.0
+    answer = parsed.get("answer")
+    if not answer:
+        return Resolution(None, domain, 0.0, cost_eur=cost, reason="no_reliable_answer")
+    if not sources:
+        # Une réponse sans source n'est jamais mise en cache.
+        return Resolution(None, domain, 0.0, cost_eur=cost, reason="no_source")
+    return Resolution(str(answer), domain, confidence, sources, cost)
 
 
 def _parse_final_json(text: str) -> dict | None:

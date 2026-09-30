@@ -308,3 +308,71 @@ def test_idempotency_pending_and_anonymous_scope(tmp_path, monkeypatch):
     a = ask(client, {"Idempotency-Key": "k", "X-Forwarded-For": "203.0.113.1"}, "Question A ?")
     b = ask(client, {"Idempotency-Key": "k", "X-Forwarded-For": "203.0.113.2"}, "Question B ?")
     assert a.status_code == b.status_code == 200 and a.json()["question"] != b.json()["question"]
+
+
+# --- moteur OpenRouter (réponses simulées, aucun appel réseau) ------------------------------
+
+
+def _openrouter(handler):
+    from app.resolver import OpenRouterResolver
+
+    return OpenRouterResolver("sk-or-test", http=httpx.Client(transport=httpx.MockTransport(handler)))
+
+
+def _completion(content, annotations=(), cost=0.0123, finish="stop"):
+    message = {"role": "assistant", "content": content, "annotations": list(annotations)}
+    return {"choices": [{"message": message, "finish_reason": finish}], "usage": {"cost": cost}}
+
+
+def test_openrouter_answer_uses_citations_and_real_cost():
+    seen = {}
+
+    def handler(request):
+        seen["body"] = json.loads(request.content)
+        seen["auth"] = request.headers["authorization"]
+        citation = {
+            "type": "url_citation",
+            "url_citation": {"url": "https://travail-emploi.gouv.fr/q", "title": "Qualiopi"},
+        }
+        text = 'Voici la réponse. {"answer": "7 critères.", "domain": "formation", "confidence": 0.85, "sources": []}'
+        return httpx.Response(200, json=_completion(text, [citation]))
+
+    resolution = _openrouter(handler).resolve("Combien de critères Qualiopi ?", "formation")
+    assert resolution.answer == "7 critères." and resolution.domain == "formation"
+    assert resolution.sources == [{"url": "https://travail-emploi.gouv.fr/q", "title": "Qualiopi"}]
+    assert resolution.cost_eur == pytest.approx(0.0123 * config.USD_TO_EUR)
+    assert seen["auth"] == "Bearer sk-or-test"
+    assert seen["body"]["model"] == config.OPENROUTER_MODEL and seen["body"]["plugins"][0]["id"] == "web"
+
+
+def test_openrouter_without_source_abstains():
+    text = '{"answer": "oui", "domain": "general", "confidence": 0.9, "sources": []}'
+    resolution = _openrouter(lambda r: httpx.Response(200, json=_completion(text))).resolve("Q ?", None)
+    assert resolution.answer is None and resolution.reason == "no_source"
+
+
+@pytest.mark.parametrize("status", [402, 429, 500])
+def test_openrouter_http_errors_are_provider_errors(status):
+    with pytest.raises(ProviderError):
+        _openrouter(lambda r: httpx.Response(status, json={"error": {"message": "x"}})).resolve("Q ?", None)
+
+
+def test_openrouter_timeout_is_classified():
+    def handler(request):
+        raise httpx.ReadTimeout("lent", request=request)
+
+    with pytest.raises(ProviderTimeout):
+        _openrouter(handler).resolve("Q ?", None)
+
+
+def test_default_resolver_prefers_anthropic_then_openrouter(monkeypatch):
+    from app.main import default_resolver
+    from app.resolver import OpenRouterResolver
+
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    assert isinstance(default_resolver(), NullResolver)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-x")
+    assert isinstance(default_resolver(), OpenRouterResolver)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-x")
+    assert isinstance(default_resolver(), ClaudeResolver)

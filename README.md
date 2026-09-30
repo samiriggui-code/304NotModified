@@ -114,8 +114,8 @@ Avec Claude Code : `claude mcp add 304notmodified -e NM304_URL=http://localhost:
 | Domaine | Fraîcheur par défaut |
 |---|---|
 | `prix`, `actualite` | 1 heure |
-| `logiciel`, `entreprise`, `facturation`, `formation`, `general` | 24 heures |
-| `reglementation` | 7 jours |
+| `logiciel`, `entreprise`, `facturation`, `formation`, `impots`, `finances`, `vie_quotidienne`, `general` | 24 heures |
+| `reglementation`, `droit` | 7 jours |
 
 Ces durées se règlent dans `app/config.py`.
 
@@ -129,6 +129,10 @@ versions, signale les contradictions et reste sur de l'information générale
 
 **Deuxième domaine : `formation`**, la formation professionnelle : Qualiopi (nouveau référentiel
 au 1er novembre 2026), CPF et EDOF, OPCO, RNCP et Répertoire spécifique, avec les mêmes règles.
+
+**Aussi : `impots`, `finances`, `vie_quotidienne`, `droit`**, chacun avec ses sources officielles
+(impots.gouv.fr, Banque de France, service-public.fr, Légifrance…). Les clients sont des agents IA :
+le service couvre large, toujours sur sources officielles et en information générale.
 
 Des questions de référence pour tester le service : [`docs/QUESTIONS_TEST.md`](docs/QUESTIONS_TEST.md).
 

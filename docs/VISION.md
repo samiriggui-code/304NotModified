@@ -266,7 +266,7 @@ Une seule intégration peut produire des centaines de milliers d'appels par mois
 | Concurrence des grands acteurs | Rester sur la réponse vérifiée, commencer par un domaine, être neutre vis-à-vis des fournisseurs d'IA |
 | Responsabilité juridique | Conditions d'utilisation claires, confiance affichée ; avis juridique avant le lancement commercial |
 | Droits des sites sources | Réponses courtes et citées plutôt que copie de contenu ; respect des conditions des sites |
-| Question trop large | Un seul domaine au départ |
+| Question trop large, qualité inégale | Sources officielles exigées par domaine, confiance affichée, surveillance des domaines et des questions sans réponse dans le tableau de bord |
 
 ---
 
@@ -305,6 +305,23 @@ Une seule intégration peut produire des centaines de milliers d'appels par mois
   Clients visés : éditeurs de logiciels pour organismes de formation, consultants et cabinets qui
   accompagnent la certification, organismes de formation et leurs agents.
   Même limite : information générale sourcée, pas de conseil personnalisé.
+- **Élargissement, décidé le 30 septembre 2026 : impôts, finances, vie quotidienne, droit**
+  (domaines `impots`, `finances`, `vie_quotidienne`, `droit`), en plus de `reglementation`,
+  `logiciel`, `prix`, `actualite`, `entreprise`.
+  **Précision du propriétaire, qui change la logique** : il n'y a **pas de démarchage de
+  clients humains**. Le client est **l'agent IA**, qui trouve le service seul (registres MCP,
+  `/llms.txt`, OpenAPI) et l'appelle. Plus le service couvre de sujets fiables, plus il sert.
+  Les « clients visés » cités plus haut décrivent donc **qui construit ou utilise les agents**,
+  pas des gens à démarcher.
+  Conséquences :
+  - la **qualité doit être contrôlée par le système** plus que par la relecture humaine
+    (sources officielles exigées, confiance, contradictions signalées), avec le tableau de bord
+    pour surveiller ;
+  - la **distribution auprès des agents** (§8 : serveur MCP publié, `/llms.txt`) devient la
+    priorité après la mise en ligne ;
+  - le **paiement par l'agent lui-même** (x402, §7 B) prend plus d'importance ;
+  - même limite partout : information générale sourcée, jamais de conseil personnalisé
+    (juridique, fiscal, financier).
 - Quel prix par requête, et une offre « réponse garantie » plus chère ?
 - Comment trouver les 10 premiers agents ou développeurs utilisateurs ?
 - À partir de quel volume passer de SQLite à une base plus robuste ?

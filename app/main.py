@@ -37,7 +37,10 @@ LLMS_TXT = f"""# 304NotModified (version d'essai)
 > rejets, avoirs, e-reporting, archivage). Toujours avec la version et la date des sources officielles.
 > Deuxième spécialité : la formation professionnelle (domaine « formation ») : Qualiopi (référentiel
 > national qualité, guide de lecture, audits), CPF et EDOF, OPCO, RNCP et Répertoire spécifique.
-> Information générale : pas de conseil juridique ou fiscal personnalisé.
+> Aussi : impôts, finances (banque, épargne, taux réglementés), vie quotidienne (démarches, aides),
+> droit en vigueur, réglementation des entreprises. Toujours à partir des sources officielles françaises
+> et européennes, avec les dates d'application.
+> Information générale : pas de conseil juridique, fiscal ou financier personnalisé.
 
 ## Utilisation
 POST /v1/answer

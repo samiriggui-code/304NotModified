@@ -129,3 +129,9 @@ def test_training_guidance_warns_about_new_qualiopi_framework():
 
     system = client.requests[0]["system"]
     assert "2026-728" in system and "33 indicateurs" in system and "travail-emploi.gouv.fr" in system
+
+
+def test_every_domain_guidance_is_for_a_known_domain():
+    assert set(config.DOMAIN_GUIDANCE) <= set(config.DOMAIN_TTL_SECONDS)
+    for domain in ("impots", "finances", "vie_quotidienne", "droit"):
+        assert domain in config.DOMAIN_GUIDANCE

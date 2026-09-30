@@ -15,15 +15,49 @@ DOMAIN_TTL_SECONDS = {
     "facturation": 86400,
     # Formation professionnelle (Qualiopi, CPF, OPCO…) : nouveau référentiel au 1er novembre 2026.
     "formation": 86400,
+    "impots": 86400,  # fiscalité des particuliers et des entreprises (barèmes, dates, démarches)
+    "finances": 86400,  # banque, épargne, crédit, assurance (taux réglementés, règles, frais)
+    "vie_quotidienne": 86400,  # démarches, aides, droits sociaux, logement, papiers
+    "droit": 7 * 86400,  # droit en vigueur (codes, lois, jurisprudence de principe)
     "general": 86400,
 }
 DEFAULT_DOMAIN = "general"
 
 # Consignes de recherche propres à un domaine, ajoutées à la consigne générale du chercheur.
-# Domaines prioritaires (voir docs/VISION.md, §12) : « facturation », la facturation électronique
-# française sous tous ses aspects (réglementation, technique, intégration, process), et
-# « formation », la formation professionnelle (Qualiopi, CPF, OPCO…).
+# Spécialités (voir docs/VISION.md, §12) : facturation électronique, formation professionnelle,
+# impôts, finances, vie quotidienne, droit, réglementation, logiciel. Les clients sont des agents IA :
+# plus le service couvre de sujets avec des sources officielles, plus il leur est utile.
 DOMAIN_GUIDANCE = {
+    "impots": (
+        "Questions sur les impôts en France (particuliers et entreprises) : impôt sur le revenu, TVA,\n"
+        "impôt sur les sociétés, taxe foncière, prélèvement à la source, crédits et réductions, dates.\n"
+        "- Sources officielles d'abord : impots.gouv.fr, BOFiP, Légifrance (Code général des impôts, loi\n"
+        "  de finances), economie.gouv.fr, service-public.fr.\n"
+        "- Précise l'année d'imposition ou de revenus concernée, et vérifie la dernière loi de finances."
+    ),
+    "finances": (
+        "Questions sur la banque, l'épargne, le crédit et l'assurance en France : taux réglementés\n"
+        "(Livret A, LEP, PEL…), plafonds, règles des produits, frais, droits des clients.\n"
+        "- Sources officielles d'abord : Banque de France, service-public.fr, economie.gouv.fr, AMF,\n"
+        "  ACPR, Légifrance (Code monétaire et financier, Code des assurances).\n"
+        "- Donne la date d'effet de chaque taux ou plafond et la prochaine date de révision si elle est connue.\n"
+        "- Aucun conseil d'investissement : uniquement les règles et les chiffres officiels."
+    ),
+    "vie_quotidienne": (
+        "Questions pratiques de la vie quotidienne en France : démarches administratives, papiers\n"
+        "d'identité, aides et prestations sociales, logement, travail, famille, transport, santé.\n"
+        "- Sources officielles d'abord : service-public.fr, les sites des administrations concernées\n"
+        "  (CAF, Assurance maladie, France Travail, ANTS…), Légifrance.\n"
+        "- Donne les conditions, montants et dates en vigueur, et le lien de la démarche officielle."
+    ),
+    "droit": (
+        "Questions sur le droit français et européen en vigueur : codes, lois, décrets, règlements,\n"
+        "grands principes de jurisprudence.\n"
+        "- Sources officielles d'abord : Légifrance (version en vigueur des articles), EUR-Lex,\n"
+        "  Conseil constitutionnel, Cour de cassation, Conseil d'État, service-public.fr.\n"
+        "- Cite les articles précis et leur version en vigueur ; signale les modifications récentes ou à venir.\n"
+        "- Information générale uniquement : ne donne pas de conseil juridique sur un cas particulier."
+    ),
     "formation": (
         "Questions sur la formation professionnelle en France : certification Qualiopi (référentiel\n"
         "national qualité, guide de lecture, audits, indicateurs, preuves), CPF et EDOF, OPCO, France\n"

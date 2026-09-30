@@ -1,6 +1,7 @@
 """API de la version d'essai : un cache de réponses vérifiées pour agents."""
 
 import hmac
+import logging
 import os
 import time
 from typing import Literal
@@ -11,8 +12,10 @@ from pydantic import BaseModel, Field
 
 from . import admin_auth, config
 from .normalize import question_key
-from .resolver import ClaudeResolver, NullResolver, Resolver
+from .resolver import ClaudeResolver, NullResolver, Resolution, Resolver
 from .store import CachedAnswer, Store
+
+log = logging.getLogger("304notmodified")
 
 
 class AnswerRequest(BaseModel):
@@ -159,7 +162,13 @@ def create_app(store: Store | None = None, resolver: Resolver | None = None) -> 
             request_id = record("hit", cached.domain, version_id=cached.version_id)
             return _payload(cached, cached=True, request_id=request_id)
 
-        resolution = resolver.resolve(body.question, hint)
+        try:
+            resolution = resolver.resolve(body.question, hint)
+        except Exception:
+            # Fournisseur en panne, crédit épuisé, limite atteinte… : l'agent reçoit « sans réponse »,
+            # jamais une erreur 500, et la question reste mesurée.
+            log.exception("Échec de la recherche fraîche")
+            resolution = Resolution(None, hint or config.DEFAULT_DOMAIN, 0.0)
         if resolution.answer is None:
             request_id = record("unanswered", resolution.domain, cost_eur=resolution.cost_eur)
             return {"status": "unanswered", "request_id": request_id, "question": body.question, "cached": False}

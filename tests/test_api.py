@@ -106,6 +106,22 @@ def test_null_resolver_measures_demand(tmp_path, monkeypatch):
     assert body["status"] == "unanswered"
 
 
+def test_provider_failure_returns_unanswered(tmp_path, monkeypatch):
+    class BrokenResolver:
+        def resolve(self, question, domain_hint):
+            raise RuntimeError("crédit épuisé")
+
+    monkeypatch.setattr(config, "ADMIN_TOKEN", "test-admin")
+    client = TestClient(create_app(Store(str(tmp_path / "b.sqlite3")), BrokenResolver()))
+    key = client.post("/internal/keys", json={"label": "b"}, headers=ADMIN).json()["api_key"]
+    response = client.post(
+        "/v1/answer", json={"question": "Bonjour ?", "domain": "facturation"}, headers={"X-API-Key": key}
+    )
+
+    assert response.status_code == 200 and response.json()["status"] == "unanswered"
+    assert client.get("/internal/stats", headers=ADMIN).json()["outcomes"] == {"unanswered": 1}
+
+
 def test_llms_txt(setup):
     client, _, _ = setup
     assert "POST /v1/answer" in client.get("/llms.txt").text

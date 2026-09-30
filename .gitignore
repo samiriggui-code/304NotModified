@@ -1,6 +1,36 @@
-.venv/
-__pycache__/
-*.sqlite3
+# Secrets : jamais dans git (seul .env.example, sans valeurs, est suivi)
 .env
+.env.*
+!.env.example
+*.pem
+*.key
+id_ed25519*
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
 .pytest_cache/
 .ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Données locales (base SQLite, journaux)
+*.sqlite3
+*.sqlite3-*
+*.db
+*.log
+
+# Tableau de bord (admin/) : complété par admin/.gitignore
+node_modules/
+.next/
+
+# Éditeurs et système
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db

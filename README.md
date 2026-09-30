@@ -64,6 +64,18 @@ Réponse :
 }
 ```
 
+### Tableau de bord
+
+Ouvrir **`http://localhost:8304/admin`** dans un navigateur et entrer le jeton `ADMIN_TOKEN`.
+On y voit en un coup d'œil : les chiffres clés (requêtes, taux de répétition, taux de cache,
+revenu, coût et marge estimés), d'où viennent les réponses (cache, recherche, sans réponse), les
+questions les plus répétées et celles restées sans réponse, les dernières requêtes, les réponses
+en mémoire avec leurs sources, et les clés d'API (avec création d'une nouvelle clé).
+La page se rafraîchit toute seule toutes les 30 secondes. Le texte venant du web y est toujours
+affiché comme du texte brut, jamais interprété.
+
+Les mêmes données en JSON : `/admin/stats`, `/admin/requests`, `/admin/answers`, `/admin/keys`.
+
 Lire les statistiques : volume, taux de répétition, taux de cache, coût, revenu et marge estimés,
 questions sans réponse.
 
@@ -121,6 +133,7 @@ indique la version concernée (`DOMAIN_GUIDANCE` dans `app/config.py`).
 ```
 app/
   main.py        API (FastAPI) : réponses, clés, statistiques, llms.txt
+  dashboard.html Tableau de bord (/admin)
   store.py       SQLite : cache, journal des requêtes, clés d'API
   resolver.py    Recherche fraîche via Claude + recherche web
   normalize.py   Normalisation des questions

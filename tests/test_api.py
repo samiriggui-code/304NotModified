@@ -109,3 +109,27 @@ def test_null_resolver_measures_demand(tmp_path, monkeypatch):
 def test_llms_txt(setup):
     client, _, _ = setup
     assert "POST /v1/answer" in client.get("/llms.txt").text
+
+
+def test_dashboard_data_requires_admin(setup):
+    client, _, _ = setup
+    assert client.get("/admin").status_code == 200  # la page, vide sans jeton
+    for path in ("/admin/keys", "/admin/requests", "/admin/answers"):
+        assert client.get(path).status_code == 403
+
+
+def test_dashboard_data(setup):
+    client, _, headers = setup
+    client.post("/v1/answer", json={"question": "Quelle est la réponse ?"}, headers=headers)
+    client.post("/v1/answer", json={"question": "question inconnu"}, headers=headers)
+
+    requests = client.get("/admin/requests", headers=ADMIN).json()
+    assert [r["outcome"] for r in requests] == ["unanswered", "miss"]
+    assert requests[0]["key_label"] == "test"
+
+    [answer] = client.get("/admin/answers", headers=ADMIN).json()
+    assert answer["answer"] == "42" and answer["sources"][0]["url"] == "https://exemple.org/source"
+
+    [key] = client.get("/admin/keys", headers=ADMIN).json()
+    assert key["label"] == "test" and key["used"] == 1
+    assert key["key"] == headers["X-API-Key"][:12] + "…"  # jamais la clé complète

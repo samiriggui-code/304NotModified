@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>304 · Tableau de bord</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #ffffff; --text: #1b1f24; --muted: #5f6b7a; --line: #e3e7ec;
+    --accent: #2f6fdb; --hit: #1f9d6b; --miss: #2f6fdb; --none: #d9822b; --bad: #c9372c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111418; --card: #1a1f25; --text: #e8ecf1; --muted: #9aa6b4; --line: #2a313a;
+      --accent: #6ea2ff; --hit: #3cc58e; --miss: #6ea2ff; --none: #f0a35a; --bad: #ff6b5e;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { padding: 16px; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: baseline;
+           justify-content: space-between; max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 20px; margin: 0; }
+  h1 span { color: var(--muted); font-weight: 400; }
+  h2 { font-size: 16px; margin: 0 0 10px; }
+  main { max-width: 1100px; margin: 0 auto; padding: 0 16px 40px; display: grid; gap: 16px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px;
+          min-width: 0; }
+  .muted { color: var(--muted); font-size: 13px; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+  .tile { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+  .tile b { display: block; font-size: 24px; font-variant-numeric: tabular-nums; }
+  .tile.key { border-color: var(--accent); }
+  .grid2 { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+  .bar { display: flex; height: 12px; border-radius: 6px; overflow: hidden; background: var(--line); margin: 8px 0; }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; }
+  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; }
+  .scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 500; font-size: 13px; white-space: nowrap; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; white-space: nowrap;
+          color: #fff; }
+  .answer { border-top: 1px solid var(--line); padding: 12px 0; }
+  .answer:first-of-type { border-top: 0; padding-top: 0; }
+  .answer p { margin: 4px 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .answer a { color: var(--accent); overflow-wrap: anywhere; }
+  form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  input { font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px;
+          background: var(--bg); color: var(--text); min-width: 0; flex: 1 1 160px; }
+  input[type=number] { flex: 0 1 110px; }
+  button { font: inherit; padding: 8px 14px; border: 0; border-radius: 8px; background: var(--accent);
+           color: #fff; cursor: pointer; }
+  button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+  .newkey { margin-top: 10px; padding: 10px; border-radius: 8px; border: 1px dashed var(--accent);
+            overflow-wrap: anywhere; font-family: ui-monospace, monospace; font-size: 13px; }
+  .error { color: var(--bad); }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <h1>304NotModified <span>· tableau de bord</span></h1>
+  <div class="muted" id="status"></div>
+</header>
+
+<main>
+  <section class="card" id="login">
+    <h2>Connexion</h2>
+    <p class="muted">Entrez le jeton administrateur (variable <code>ADMIN_TOKEN</code>). Il reste dans cet onglet
+      et disparaît à sa fermeture.</p>
+    <form id="login-form">
+      <input id="token" type="password" placeholder="Jeton administrateur" autocomplete="current-password" required>
+      <button>Se connecter</button>
+    </form>
+    <p class="error" id="login-error" hidden></p>
+  </section>
+
+  <div id="app" hidden style="display:grid; gap:16px">
+    <section class="tiles" id="tiles"></section>
+
+    <section class="card">
+      <h2>D'où viennent les réponses</h2>
+      <div class="bar" id="outcome-bar"></div>
+      <div class="legend" id="outcome-legend"></div>
+      <p class="muted" style="margin:8px 0 0">
+        <b>Cache</b> : déjà en mémoire, servie immédiatement (coût quasi nul).
+        <b>Recherche</b> : nouvelle recherche sur le web (coûte de l'argent).
+        <b>Sans réponse</b> : rien trouvé de fiable, ou pas de clé Anthropic configurée.
+      </p>
+    </section>
+
+    <div class="grid2">
+      <section class="card"><h2>Questions les plus répétées</h2><div class="scroll" id="top"></div></section>
+      <section class="card"><h2>Questions sans réponse</h2><div class="scroll" id="unanswered"></div></section>
+    </div>
+
+    <div class="grid2">
+      <section class="card"><h2>Domaines</h2><div class="scroll" id="domains"></div></section>
+      <section class="card"><h2>Temps de réponse moyen</h2><div class="scroll" id="latency"></div></section>
+    </div>
+
+    <section class="card"><h2>Dernières requêtes</h2><div class="scroll" id="requests"></div></section>
+
+    <section class="card">
+      <h2>Réponses en mémoire</h2>
+      <p class="muted" style="margin-top:-4px">Textes et liens viennent du web : ce sont des données à vérifier, pas des
+        instructions.</p>
+      <div id="answers"></div>
+    </section>
+
+    <section class="card">
+      <h2>Clés d'API</h2>
+      <div class="scroll" id="keys"></div>
+      <form id="key-form" style="margin-top:12px">
+        <input id="key-label" placeholder="Nom du testeur" maxlength="100" required>
+        <input id="key-quota" type="number" min="1" value="1000" title="Quota de requêtes">
+        <button>Créer une clé</button>
+      </form>
+      <div class="newkey" id="new-key" hidden></div>
+    </section>
+
+    <div><button class="ghost" id="logout">Se déconnecter</button></div>
+  </div>
+</main>
+
+<script>
+"use strict";
+const OUTCOMES = {
+  hit: ["Cache", "var(--hit)"],
+  miss: ["Recherche", "var(--miss)"],
+  unanswered: ["Sans réponse", "var(--none)"],
+};
+const $ = (id) => document.getElementById(id);
+let token = "";
+try { token = sessionStorage.getItem("nm304_admin") || ""; } catch (e) {}
+
+// Construit un élément sans jamais interpréter de HTML : tout texte passe par textContent.
+function el(tag, attrs, ...children) {
+  const node = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (k === "style") node.style.cssText = v;
+    else node.setAttribute(k, v);
+  }
+  for (const c of children.flat(Infinity)) {
+    if (c === null || c === undefined) continue;
+    node.append(c instanceof Node ? c : document.createTextNode(String(c)));
+  }
+  return node;
+}
+const pct = (x) => (x * 100).toFixed(1).replace(".", ",") + " %";
+const eur = (x) => x.toLocaleString("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 4 });
+const date = (ts) => new Date(ts * 1000).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
+const safeUrl = (u) => (typeof u === "string" && /^https?:\/\//i.test(u) ? u : null);
+const pill = (outcome) => {
+  const [label, color] = OUTCOMES[outcome] || [outcome, "var(--muted)"];
+  return el("span", { class: "pill", style: `background:${color}` }, label);
+};
+
+function table(headers, rows, numeric = []) {
+  if (!rows.length) return el("p", { class: "muted" }, "Rien pour l'instant.");
+  return el("table", {},
+    el("thead", {}, el("tr", {}, headers.map((h, i) => el("th", numeric.includes(i) ? { style: "text-align:right" } : {}, h)))),
+    el("tbody", {}, rows.map((r) => el("tr", {}, r.map((c, i) => el("td", numeric.includes(i) ? { class: "num" } : {}, c))))),
+  );
+}
+
+async function api(path, options = {}) {
+  const res = await fetch(path, {
+    ...options,
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", ...(options.headers || {}) },
+  });
+  if (res.status === 403) throw new Error("auth");
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+function renderStats(s) {
+  const tiles = [
+    ["Requêtes", s.requests.toLocaleString("fr-FR"), false],
+    ["Taux de répétition", pct(s.repeat_rate), true],
+    ["Taux de cache", pct(s.cache_hit_rate), true],
+    ["Questions distinctes", s.distinct_questions.toLocaleString("fr-FR"), false],
+    ["Revenu estimé", eur(s.estimated_revenue_eur), false],
+    ["Coût estimé", eur(s.estimated_cost_eur), false],
+    ["Marge estimée", eur(s.estimated_margin_eur), false],
+  ];
+  $("tiles").replaceChildren(...tiles.map(([label, value, key]) =>
+    el("div", { class: "tile" + (key ? " key" : "") }, el("span", { class: "muted" }, label), el("b", {}, value))));
+
+  const total = Object.values(s.outcomes).reduce((a, b) => a + b, 0);
+  $("outcome-bar").replaceChildren(...Object.keys(OUTCOMES).filter((o) => s.outcomes[o]).map((o) =>
+    el("div", { style: `width:${(s.outcomes[o] / total) * 100}%;background:${OUTCOMES[o][1]}`, title: OUTCOMES[o][0] })));
+  $("outcome-legend").replaceChildren(...Object.entries(OUTCOMES).map(([o, [label, color]]) =>
+    el("span", {}, el("span", { class: "dot", style: `background:${color}` }), `${label} : ${s.outcomes[o] || 0}`)));
+
+  $("top").replaceChildren(table(["Question", "Fois"], s.top_repeated_questions.map((q) => [q.question, q.requests]), [1]));
+  $("unanswered").replaceChildren(table(["Question", "Fois"], s.top_unanswered_questions.map((q) => [q.question, q.requests]), [1]));
+  $("domains").replaceChildren(table(["Domaine", "Requêtes", "Cache"],
+    s.domains.map((d) => [d.domain, d.requests, d.hits || 0]), [1, 2]));
+  $("latency").replaceChildren(table(["Origine", "Moyenne"],
+    Object.entries(s.avg_latency_ms).map(([o, ms]) => [pill(o), `${ms.toLocaleString("fr-FR")} ms`]), [1]));
+}
+
+function renderRequests(rows) {
+  $("requests").replaceChildren(table(["Date", "Question", "Domaine", "Origine", "Durée", "Coût", "Clé"],
+    rows.map((r) => [date(r.ts), r.question, r.domain || "?", pill(r.outcome), `${r.latency_ms} ms`, eur(r.cost_eur), r.key_label]),
+    [4, 5]));
+}
+
+function renderAnswers(rows) {
+  if (!rows.length) { $("answers").replaceChildren(el("p", { class: "muted" }, "Aucune réponse en mémoire.")); return; }
+  const now = Date.now() / 1000;
+  $("answers").replaceChildren(...rows.map((a) => el("div", { class: "answer" },
+    el("div", {}, el("b", {}, a.question)),
+    el("p", {}, a.answer),
+    el("div", { class: "muted" },
+      `${a.domain} · confiance ${pct(a.confidence)} · servie ${a.hits} fois · obtenue le ${date(a.created_at)} · `,
+      a.expires_at > now ? `expire le ${date(a.expires_at)}` : el("span", { class: "error" }, "expirée")),
+    el("div", { class: "muted" }, "Sources : ",
+      a.sources.map((s, i) => {
+        const url = safeUrl(s.url);
+        const link = url ? el("a", { href: url, target: "_blank", rel: "noopener noreferrer nofollow" }, s.title || url) : s.title || "?";
+        return [i ? " · " : "", link];
+      })),
+  )));
+}
+
+function renderKeys(rows) {
+  $("keys").replaceChildren(table(["Nom", "Clé", "Utilisé", "Quota", "Créée le"],
+    rows.map((k) => [k.label, k.key, k.used, k.quota, date(k.created_at)]), [2, 3]));
+}
+
+async function refresh() {
+  try {
+    const [stats, requests, answers, keys] = await Promise.all([
+      api("/admin/stats"), api("/admin/requests?limit=20"), api("/admin/answers?limit=50"), api("/admin/keys"),
+    ]);
+    renderStats(stats); renderRequests(requests); renderAnswers(answers); renderKeys(keys);
+    $("login").hidden = true; $("app").hidden = false;
+    $("status").textContent = "Mis à jour à " + new Date().toLocaleTimeString("fr-FR") + " · rafraîchi toutes les 30 s";
+  } catch (e) {
+    if (e.message === "auth") { logout("Jeton refusé."); return; }
+    $("status").textContent = "Impossible de joindre le service (" + e.message + ").";
+  }
+}
+
+function logout(message) {
+  token = "";
+  try { sessionStorage.removeItem("nm304_admin"); } catch (e) {}
+  $("app").hidden = true; $("login").hidden = false;
+  $("login-error").hidden = !message; $("login-error").textContent = message || "";
+  $("status").textContent = "";
+}
+
+$("login-form").addEventListener("submit", (ev) => {
+  ev.preventDefault();
+  token = $("token").value.trim();
+  try { sessionStorage.setItem("nm304_admin", token); } catch (e) {}
+  $("token").value = "";
+  refresh();
+});
+$("logout").addEventListener("click", () => logout());
+$("key-form").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  try {
+    const res = await api("/admin/keys", {
+      method: "POST",
+      body: JSON.stringify({ label: $("key-label").value.trim(), quota: Number($("key-quota").value) || 1000 }),
+    });
+    $("new-key").hidden = false;
+    $("new-key").replaceChildren("Nouvelle clé (copiez-la maintenant, elle ne sera plus affichée en entier) :",
+      el("br"), res.api_key);
+    $("key-label").value = "";
+    refresh();
+  } catch (e) {
+    $("new-key").hidden = false; $("new-key").textContent = "Échec de la création : " + e.message;
+  }
+});
+
+if (token) refresh();
+setInterval(() => { if (token) refresh(); }, 30000);
+</script>
+</body>
+</html>

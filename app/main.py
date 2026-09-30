@@ -3,9 +3,10 @@
 import hmac
 import os
 import time
+from pathlib import Path
 
-from fastapi import Depends, FastAPI, Header, HTTPException
-from fastapi.responses import PlainTextResponse
+from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi.responses import HTMLResponse, PlainTextResponse
 from pydantic import BaseModel, Field
 
 from . import config
@@ -43,6 +44,9 @@ Vérifiez vous-même les sources si l'enjeu est important : confidence est une e
 
 Documentation OpenAPI : /docs et /openapi.json
 """
+
+
+DASHBOARD_HTML = (Path(__file__).parent / "dashboard.html").read_text(encoding="utf-8")
 
 
 def create_app(store: Store | None = None, resolver: Resolver | None = None) -> FastAPI:
@@ -139,6 +143,24 @@ def create_app(store: Store | None = None, resolver: Resolver | None = None) -> 
     @app.get("/admin/stats", dependencies=[Depends(require_admin)])
     def stats():
         return store.stats(config.PRICE_PER_REQUEST_EUR)
+
+    @app.get("/admin/keys", dependencies=[Depends(require_admin)])
+    def list_keys():
+        return store.list_keys()
+
+    @app.get("/admin/requests", dependencies=[Depends(require_admin)])
+    def recent_requests(limit: int = Query(default=50, ge=1, le=500)):
+        return store.recent_requests(limit)
+
+    @app.get("/admin/answers", dependencies=[Depends(require_admin)])
+    def list_answers(limit: int = Query(default=50, ge=1, le=500)):
+        return store.list_answers(limit)
+
+    # Tableau de bord : la page elle-même est publique, mais elle ne montre rien sans le jeton
+    # administrateur, qu'elle envoie à chaque appel des routes /admin/* ci-dessus.
+    @app.get("/admin", response_class=HTMLResponse, include_in_schema=False)
+    def dashboard():
+        return DASHBOARD_HTML
 
     return app
 

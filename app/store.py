@@ -5,7 +5,7 @@ import secrets
 import sqlite3
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS answers (
@@ -111,6 +111,32 @@ class Store:
                 ),
             )
             self._db.commit()
+
+    def list_keys(self) -> list[dict]:
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT key, label, quota, used, created_at FROM api_keys ORDER BY created_at DESC"
+            ).fetchall()
+        # La clé complète n'est montrée qu'à sa création : ici, seulement son début.
+        return [{**dict(r), "key": r["key"][:12] + "…"} for r in rows]
+
+    # --- consultation pour le tableau de bord ------------------------------
+
+    def recent_requests(self, limit: int) -> list[dict]:
+        with self._lock:
+            rows = self._db.execute(
+                """SELECT r.ts, r.question, r.domain, r.outcome, r.latency_ms, r.cost_eur,
+                          COALESCE(k.label, '?') AS key_label
+                   FROM requests r LEFT JOIN api_keys k ON k.key = r.api_key
+                   ORDER BY r.id DESC LIMIT ?""",
+                (limit,),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def list_answers(self, limit: int) -> list[dict]:
+        with self._lock:
+            rows = self._db.execute("SELECT * FROM answers ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()
+        return [{**asdict(_to_answer(r)), "hits": r["hits"]} for r in rows]
 
     # --- journal et statistiques -----------------------------------------
 

@@ -7,6 +7,7 @@ immédiatement depuis le cache ; sinon, le service fait la recherche une seule f
 la garde pour les suivants.
 
 - Vision complète, marché, modèle économique, risques : [`docs/VISION.md`](docs/VISION.md)
+- Journal des cas réels : [`docs/CAS_REELS.md`](docs/CAS_REELS.md)
 - Consignes pour Claude : [`CLAUDE.md`](CLAUDE.md)
 
 > **Statut : version d'essai.** Elle sert à mesurer le volume, le taux de répétition des questions
@@ -105,6 +106,10 @@ Avec Claude Code : `claude mcp add 304notmodified -e NM304_URL=http://localhost:
 
 Ces durées se règlent dans `app/config.py`.
 
+**Premier domaine : `logiciel`.** Pour ces questions, le chercheur privilégie les sources
+officielles (documentation, notes de version, guides de migration, registres de paquets) et
+indique la version concernée (`DOMAIN_GUIDANCE` dans `app/config.py`).
+
 ## Vérifier avant chaque commit
 
 ```bash
@@ -124,4 +129,5 @@ mcp_server/
   server.py      Serveur MCP : outil `ask` qui relaie vers l'API
 tests/           Tests automatisés
 docs/VISION.md   Vision, marché, modèle économique, feuille de route
+docs/CAS_REELS.md  Journal des cas réels : les problèmes que le service doit résoudre
 ```

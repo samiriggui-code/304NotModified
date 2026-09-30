@@ -27,25 +27,19 @@ extrait la même réponse, puis recommence le lendemain.
 C'est lent (plusieurs secondes par recherche) et coûteux (recherche web plus traitement par l'IA),
 et le travail est refait inutilement des milliers de fois.
 
-### Un cas réel, vécu en construisant ce projet (30 septembre 2026)
+### Des cas réels, vécus en construisant ce projet
 
-En écrivant le serveur MCP de 304NotModified, Claude devait utiliser le kit officiel MCP pour Python.
-Sa mémoire indiquait une façon de faire (`FastMCP`), mais le kit était passé en version 2.2.0 et
-cette classe avait été renommée (`MCPServer`), avec d'autres changements.
-
-- Sans vérification, le code écrit de mémoire ne fonctionnait pas du tout.
-- Avec vérification, il a fallu installer le kit, lire l'erreur, fouiller son code, puis corriger
-  deux essais ratés supplémentaires (format de réponse) avant d'arriver au bon résultat.
-- Au même moment, d'autres agents font très probablement la même recherche, chacun de son côté.
-
-Avec 304NotModified, une seule question (« comment créer un serveur MCP avec la dernière version
-du kit Python ? ») aurait suffi : réponse immédiate, avec la page de migration officielle comme
-source et une date.
+En écrivant le serveur MCP de 304NotModified (30 septembre 2026), Claude s'est fié à sa mémoire
+pour utiliser le kit officiel MCP pour Python. Le kit était passé en version 2 et avait changé de
+nom : le code écrit de mémoire ne fonctionnait pas, et il a fallu plusieurs essais pour trouver la
+bonne façon de faire. Au même moment, d'autres agents font très probablement la même recherche,
+chacun de son côté. Avec 304NotModified, une seule question aurait suffi.
 
 **Ce que ça montre** : la mémoire d'un agent date de son entraînement, alors que les logiciels
-changent chaque mois. Tous les agents qui écrivent du code ont ce problème. C'est un argument fort
-pour choisir le domaine `logiciel` (versions, API, changements de nom) comme premier domaine, et un
-exemple concret à montrer aux premiers développeurs.
+changent chaque mois. Tous les agents qui écrivent du code ont ce problème. C'est pourquoi
+**`logiciel` est le premier domaine choisi**.
+
+Tous ces cas sont notés au fur et à mesure dans [`CAS_REELS.md`](CAS_REELS.md).
 
 ---
 
@@ -233,7 +227,7 @@ Une seule intégration peut produire des centaines de milliers d'appels par mois
 
 1. **Mesurer** : mettre la version d'essai en ligne sur un hébergement peu coûteux, la faire
    tester par quelques agents et relever les chiffres ci-dessus.
-2. **Choisir le premier domaine** d'après les mesures. Les candidats : prix et disponibilité,
+2. **Choisir le premier domaine** d'après les mesures. *Fait : `logiciel`, à confirmer par les mesures.* Les candidats : prix et disponibilité,
    versions de logiciels et d'API, informations d'entreprises, réglementation.
 3. **Serveur MCP et bibliothèques**, pour la distribution.
 4. **Paiement par crédits Stripe**, puis x402.
@@ -261,7 +255,7 @@ Une seule intégration peut produire des centaines de milliers d'appels par mois
 
 ## 12. Questions ouvertes
 
-- Quel premier domaine ? (Le cas réel du §2 plaide pour `logiciel`.)
+- ~~Quel premier domaine ?~~ Choisi le 30 septembre 2026 : `logiciel` (voir §2 et `CAS_REELS.md`).
 - Quel prix par requête, et une offre « réponse garantie » plus chère ?
 - Comment trouver les 10 premiers agents ou développeurs utilisateurs ?
 - À partir de quel volume passer de SQLite à une base plus robuste ?

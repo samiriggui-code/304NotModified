@@ -87,3 +87,11 @@ def test_parse_final_json_takes_last_object():
 def test_normalization():
     assert normalize_question("  Quelle   est la RÉPONSE ?! ") == "quelle est la reponse"
     assert question_key("Café ?") == question_key("cafe")
+
+
+def test_software_guidance_is_sent_to_the_researcher():
+    client = FakeClient([message([NS(type="text", text=FINAL, citations=None)])])
+    ClaudeResolver(client).resolve("Comment créer un serveur MCP en Python ?", "logiciel")
+
+    system = client.requests[0]["system"]
+    assert "notes de version" in system and "guides de migration" in system

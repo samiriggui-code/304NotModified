@@ -21,6 +21,13 @@ activer un paiement, publier dans un registre, dépenser de l'argent.
 - Pour l'API Claude : consulter la documentation à jour (modèle, type d'outil de recherche web,
   paramètres) plutôt que se fier à sa mémoire.
 
+## Journal des cas réels (important)
+
+Chaque fois que tu butes sur une information périmée ou que tu dois chercher une solution (version
+qui a changé, fonction renommée, erreur inattendue, documentation contradictoire…), ajoute une
+entrée dans `docs/CAS_REELS.md`, au format indiqué en haut du fichier, et signale-le au
+propriétaire. C'est la preuve du besoin auquel répond 304NotModified : notre fond de commerce.
+
 ## Git
 
 On travaille directement sur la branche `main` (choix du propriétaire) : pas de branche à part

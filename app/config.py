@@ -14,6 +14,22 @@ DOMAIN_TTL_SECONDS = {
 }
 DEFAULT_DOMAIN = "general"
 
+# Consignes de recherche propres à un domaine, ajoutées à la consigne générale du chercheur.
+# Premier domaine choisi : « logiciel » (voir docs/VISION.md et docs/CAS_REELS.md).
+DOMAIN_GUIDANCE = {
+    "logiciel": (
+        "Questions sur un logiciel, une bibliothèque, une API ou un outil informatique :\n"
+        "- Cherche d'abord les sources officielles du projet : documentation officielle, notes de version\n"
+        "  (changelog, release notes), guides de migration, page du paquet sur le registre officiel\n"
+        "  (PyPI, npm, crates.io…), dépôt officiel du projet. Un blog, un forum ou un tutoriel ne suffit\n"
+        "  pas seul : s'il est ta seule source, baisse nettement la confiance.\n"
+        "- Indique toujours le numéro de version concerné et, si tu la trouves, sa date de sortie.\n"
+        "- Signale les changements incompatibles (fonction ou classe renommée, supprimée, paramètre\n"
+        "  modifié) et la façon actuelle de faire.\n"
+        "- Si la réponse dépend de la version, dis pour quelle version elle est valable."
+    ),
+}
+
 DB_PATH = os.environ.get("NM304_DB", "304notmodified.sqlite3")
 ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN", "")
 

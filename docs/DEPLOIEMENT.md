@@ -11,8 +11,8 @@ Ce qui sera installé :
 
 | Adresse | Service | Pour qui |
 |---|---|---|
-| `https://304notmodified.com/v1/…`, `/llms.txt`, `/docs` | API et MCP (Python, port local 8304) | les agents IA |
-| `https://304notmodified.com/admin` | tableau de bord (Next.js Metronic, port local 3304) | vous seul, avec e-mail et mot de passe |
+| `https://304notfound.com/v1/…`, `/llms.txt`, `/docs` | API et MCP (Python, port local 8304) | les agents IA |
+| `https://304notfound.com/admin` | tableau de bord (Next.js Metronic, port local 3304) | vous seul, avec e-mail et mot de passe |
 | `/internal/…` | données du tableau de bord | **jamais routé par Traefik** : seul le tableau de bord, sur le serveur, y accède |
 
 - le code dans `/opt/304notmodified`, les deux services tournent en permanence sous un utilisateur
@@ -59,16 +59,16 @@ De retour sur le VPS (mettez votre e-mail : ce sera votre identifiant de connexi
 sudo -u nm304 sh -c 'ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts'
 sudo install -d -o nm304 -g nm304 /opt/304notmodified
 sudo -u nm304 git clone git@github.com:samiriggui-code/304NotModified.git /opt/304notmodified
-sudo bash /opt/304notmodified/deploy/install.sh 304notmodified.com vous@exemple.fr
+sudo bash /opt/304notmodified/deploy/install.sh 304notfound.com vous@exemple.fr
 ```
 
-Le script vérifie que le domaine pointe bien sur le VPS et que les ports 80/443 sont libres,
-vérifie que Traefik tourne et trouve sa configuration, installe tout (compter plusieurs minutes
+Le script vérifie que le domaine pointe bien sur le VPS,
+que Traefik tourne et trouve sa configuration, installe tout (compter plusieurs minutes
 pour la compilation du tableau de bord), dépose les routes, vérifie que l'API répond, que le
 tableau de bord répond, que `/internal` est bien bloqué et que l'API n'est pas joignable en direct, puis affiche
 **une seule fois** votre mot de passe. Notez-le aussitôt dans un gestionnaire de mots de passe.
 
-Ensuite : **https://304notmodified.com/admin**
+Ensuite : **https://304notfound.com/admin**
 
 Le script peut être relancé sans risque. S'il s'arrête, il explique pourquoi en français.
 

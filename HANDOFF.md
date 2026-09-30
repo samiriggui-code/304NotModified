@@ -103,7 +103,7 @@ ordinateur + mobile, clair + sombre) :
 
 **Pas encore fait** :
 
-1. **Mise en ligne** (`docs/DEPLOIEMENT.md`) — le propriétaire a acheté `304notmodified.com`, qui
+1. **Mise en ligne** (`docs/DEPLOIEMENT.md`) — le propriétaire a acheté `304notfound.com`, qui
    pointe sur son VPS (Ubuntu 24).
 2. **Aucune vraie recherche testée** : pas de clé Anthropic utilisée. Avant : vérifier la doc à jour
    de l'API Claude (modèle, type d'outil web_search, tarifs dans `config.py`), fixer une limite de
@@ -121,7 +121,7 @@ Traefik `v3.3` en conteneur, `--providers.file.directory=/etc/traefik/dynamic` m
 `./traefik/dynamic`, entrées `web` (redirigée) et `websecure`, résolveur de certificats nommé **`le`**
 (HTTP challenge), réseau Docker `gsms`, `extra_hosts: host.docker.internal:host-gateway`.
 
-`deploy/install.sh 304notmodified.com <email>` :
+`deploy/install.sh 304notfound.com <email>` :
 
 - **détecte** le conteneur Traefik, le dossier dynamique (source du montage), le résolveur et le
   réseau ; s'arrête avec un message clair si l'un manque ; n'installe aucun proxy ;
@@ -154,7 +154,7 @@ Points à surveiller au premier lancement :
 
 ## 8. Décisions prises pendant la session (chronologie courte)
 
-- Nom et domaine : `304notmodified.com` (acheté par le propriétaire).
+- Nom et domaine : `304notfound.com` (acheté par le propriétaire).
 - Premier domaine : `logiciel` écarté (Context7 l'occupe) → facturation électronique, tous aspects ;
   puis Qualiopi ; puis impôts, finances, vie quotidienne, droit. Pas de démarchage : les agents sont
   les clients.

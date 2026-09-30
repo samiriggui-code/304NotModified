@@ -2,7 +2,7 @@
 # Installe (ou réinstalle) 304NotModified sur le VPS (Debian/Ubuntu), derrière le Traefik existant.
 #
 # Utilisation, en root sur le VPS :
-#     bash install.sh 304notmodified.com vous@exemple.fr
+#     bash install.sh 304notfound.com vous@exemple.fr
 #
 # Deux services (systemd, sur la machine) :
 #   - 304notmodified        l'API et le MCP pour les agents (Python, port 8304)
@@ -33,7 +33,7 @@ say() { printf '\n\033[1;34m==> %s\033[0m\n' "$*"; }
 stop() { printf '\n\033[1;31mArrêt : %s\033[0m\n' "$*" >&2; exit 1; }
 
 [ "$(id -u)" -eq 0 ] || stop "lancez ce script en root (sudo bash install.sh $DOMAIN $OWNER_EMAIL)."
-[ -n "$DOMAIN" ] || stop "indiquez le nom de domaine, par exemple : bash install.sh 304notmodified.com vous@exemple.fr"
+[ -n "$DOMAIN" ] || stop "indiquez le nom de domaine, par exemple : bash install.sh 304notfound.com vous@exemple.fr"
 # shellcheck disable=SC1091
 [ -r /etc/os-release ] && . /etc/os-release
 case "${ID:-}" in debian|ubuntu) ;; *) stop "ce script est prévu pour Debian ou Ubuntu (système trouvé : ${ID:-inconnu})." ;; esac

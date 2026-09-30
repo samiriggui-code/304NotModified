@@ -36,8 +36,11 @@ bonne façon de faire. Au même moment, d'autres agents font très probablement 
 chacun de son côté. Avec 304NotModified, une seule question aurait suffi.
 
 **Ce que ça montre** : la mémoire d'un agent date de son entraînement, alors que les logiciels
-changent chaque mois. Tous les agents qui écrivent du code ont ce problème. C'est pourquoi
-**`logiciel` est le premier domaine choisi**.
+changent chaque mois. Tous les agents qui écrivent du code ont ce problème.
+
+*Mise à jour du même jour* : ce besoin est réel, mais **Context7 y répond déjà** (voir §5). Le choix
+de `logiciel` comme premier domaine est donc remis en question. Piste recommandée : la
+réglementation française et européenne (voir §12).
 
 Tous ces cas sont notés au fur et à mesure dans [`CAS_REELS.md`](CAS_REELS.md).
 
@@ -99,6 +102,19 @@ Le créneau « donner le web aux agents » est **déjà occupé et bien financé
 | Offres d'entrée de gamme | Recherche basique | à partir de 1 $ / 1 000 |
 | Firecrawl, Jina Reader | Pages web transformées en texte propre | variable |
 | Cloudflare | Fait payer les robots qui parcourent les sites | côté éditeurs |
+| **Context7** (Upstash) | Documentation **à jour** de plus de 142 000 bibliothèques pour les agents qui codent, via MCP. Annonce des utilisateurs chez OpenAI, Anthropic, Google, Netflix, GitHub | non affiché sur son site |
+| **Perplexity** (API) | **Réponses avec sources**, tous sujets | API de recherche : 5 $ / 1 000 requêtes ; modèles Sonar : à vérifier |
+
+Ajouté le 30 septembre 2026 (sources : https://context7.com, https://github.com/upstash/context7,
+https://upstash.com/blog/context7-vs-web-search-benchmark du 27 mai 2026, qui annonce 34 % de coût
+en moins que la recherche web de Claude Code ; https://docs.perplexity.ai/docs/getting-started/pricing).
+
+- **Context7 occupe déjà le domaine `logiciel`** : il renvoie des extraits de documentation, pas
+  une réponse finale, mais il répond au même besoin (la mémoire périmée des agents qui codent).
+- **Perplexity vend déjà des réponses sourcées**, mais recalculées à chaque fois : aucune mémoire
+  partagée entre agents n'a été trouvée.
+- Aucun acteur trouvé ne fait exactement « une mémoire commune de réponses finales vérifiées,
+  réutilisées entre agents ». La recherche n'est pas exhaustive : à refaire régulièrement.
 
 **Conséquence** : refaire « un meilleur moteur de recherche pour agents » seul est perdu d'avance.
 Le positionnement doit rester **la réponse vérifiée et réutilisable**, en commençant par **un seul
@@ -227,7 +243,7 @@ Une seule intégration peut produire des centaines de milliers d'appels par mois
 
 1. **Mesurer** : mettre la version d'essai en ligne sur un hébergement peu coûteux, la faire
    tester par quelques agents et relever les chiffres ci-dessus.
-2. **Choisir le premier domaine** d'après les mesures. *Fait : `logiciel`, à confirmer par les mesures.* Les candidats : prix et disponibilité,
+2. **Choisir le premier domaine** d'après les mesures. *En cours : voir §12.* Les candidats : prix et disponibilité,
    versions de logiciels et d'API, informations d'entreprises, réglementation.
 3. **Serveur MCP et bibliothèques**, pour la distribution.
 4. **Paiement par crédits Stripe**, puis x402.
@@ -255,7 +271,11 @@ Une seule intégration peut produire des centaines de milliers d'appels par mois
 
 ## 12. Questions ouvertes
 
-- ~~Quel premier domaine ?~~ Choisi le 30 septembre 2026 : `logiciel` (voir §2 et `CAS_REELS.md`).
+- **Quel premier domaine ?** `logiciel` avait été choisi le 30 septembre 2026, puis remis en question
+  le même jour après la découverte de Context7 (§5). Piste recommandée : **réglementation
+  française et européenne**, car aucun concurrent n'y a été trouvé, une erreur y coûte cher (le prix
+  peut être plus élevé), les règles changent lentement (bon taux de cache) et le fondateur est
+  francophone. Décision à prendre par le propriétaire.
 - Quel prix par requête, et une offre « réponse garantie » plus chère ?
 - Comment trouver les 10 premiers agents ou développeurs utilisateurs ?
 - À partir de quel volume passer de SQLite à une base plus robuste ?

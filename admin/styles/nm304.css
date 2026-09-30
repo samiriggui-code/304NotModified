@@ -1,0 +1,16 @@
+/* Couleurs des graphiques de 304NotModified.
+   Palette catégorielle validée (daltonisme, contraste) sur fond clair et sombre :
+   node validate_palette.js "#2a78d6,#eb6834,#1baf7a" --mode light / "#3987e5,#d95926,#199e70" --mode dark.
+   Sur fond clair, le vert d'eau est sous 3:1 : chaque graphique a donc une légende et une vue tableau. */
+:root {
+  --nm-cache: #2a78d6; /* réponses servies depuis la mémoire */
+  --nm-search: #eb6834; /* nouvelles recherches (payantes) */
+  --nm-none: #1baf7a; /* sans réponse */
+  --nm-good: #0ca30c; /* retour utile (statut, toujours avec icône et libellé) */
+  --nm-bad: #d03b3b; /* retour négatif */
+}
+.dark {
+  --nm-cache: #3987e5;
+  --nm-search: #d95926;
+  --nm-none: #199e70;
+}

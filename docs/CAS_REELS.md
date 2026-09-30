@@ -142,3 +142,22 @@
 - **Réponse attendue de 304** : « `ctx.session.client_params.client_info` (champs `name` et
   `version`), avec `ctx: Context` en paramètre de l'outil. Le client peut ne pas s'annoncer :
   prévoir une valeur par défaut. »
+
+## 8. ESLint 9 cassé par des versions de dépendances forcées (projet Next.js Metronic)
+
+- **Date** : 30 septembre 2026
+- **Domaine** : `logiciel`
+- **Question** : « ESLint 9 plante au démarrage avec "Cannot set properties of undefined (setting
+  'defaultMeta')" puis "minimatch does not provide an export named 'default'" : pourquoi ? »
+- **Ce qui s'est passé** : en reprenant le front Metronic de GSMS Qualiopi pour le tableau de bord,
+  `npx eslint .` plantait avant même d'analyser un fichier. Cause : le `package.json` force pour
+  tout le projet (`overrides`) `ajv >= 8.18` et `minimatch ^10.2.1`, pour des raisons de sécurité ;
+  or ESLint 9 et `@eslint/eslintrc` exigent `ajv` 6 et `minimatch` 3. Trois essais pour trouver la
+  bonne combinaison. Le même `package.json` est dans GSMS Qualiopi : son `npm run lint` est
+  probablement cassé aussi.
+- **Source de la bonne réponse** : messages d'erreur et piles d'appels d'ESLint 9.39.2 ; documentation
+  npm des `overrides` imbriqués.
+- **Réponse attendue de 304** : « Gardez les versions forcées pour l'application, mais rendez à ESLint
+  les siennes avec des overrides imbriqués : `"eslint": {"ajv": "^6.12.6", "minimatch": "^3.1.2"}`
+  et la même chose pour `"@eslint/eslintrc"`. ESLint est un outil de développement : il n'est pas
+  livré sur le serveur. »

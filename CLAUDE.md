@@ -21,6 +21,11 @@ activer un paiement, publier dans un registre, dépenser de l'argent.
 - Pour l'API Claude : consulter la documentation à jour (modèle, type d'outil de recherche web,
   paramètres) plutôt que se fier à sa mémoire.
 
+## Git
+
+On travaille directement sur la branche `main` (choix du propriétaire) : pas de branche à part
+ni de pull request, sauf demande de sa part.
+
 ## Avant tout commit
 
 ```bash

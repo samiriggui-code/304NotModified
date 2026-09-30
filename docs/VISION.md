@@ -192,6 +192,8 @@ Une seule intégration peut produire des centaines de milliers d'appels par mois
 - **`/llms.txt`** et OpenAPI (`/docs`) pour les agents.
 - **Mode sans clé Anthropic** : les questions sont enregistrées comme « sans réponse », ce qui
   mesure la demande sans rien dépenser.
+- **Serveur MCP** (`mcp_server/`) : outil `ask` qui relaie vers l'API, pour brancher un agent en une ligne
+  (pas encore publié dans les registres).
 - **Tests automatisés** (pytest) et lint (ruff).
 
 ### Les chiffres à surveiller

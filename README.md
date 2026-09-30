@@ -72,6 +72,29 @@ curl localhost:8304/admin/stats -H "Authorization: Bearer $ADMIN_TOKEN"
 
 Documentation pour les agents : `/llms.txt` et `/docs` (OpenAPI).
 
+## Brancher un agent par MCP
+
+Le serveur MCP (`mcp_server/`) donne aux agents un outil `ask` (question, domaine facultatif).
+Il ne fait que relayer vers `POST /v1/answer` avec la clé de l'agent : aucun accès direct à la base.
+
+Configuration type d'un client MCP (Claude Desktop, Claude Code, etc.) :
+
+```json
+{
+  "mcpServers": {
+    "304notmodified": {
+      "command": "/chemin/vers/304NotModified/.venv/bin/python",
+      "args": ["-m", "mcp_server.server"],
+      "cwd": "/chemin/vers/304NotModified",
+      "env": {"NM304_URL": "http://localhost:8304", "NM304_API_KEY": "nm304_..."}
+    }
+  }
+}
+```
+
+Avec Claude Code : `claude mcp add 304notmodified -e NM304_URL=http://localhost:8304
+-e NM304_API_KEY=nm304_... -- .venv/bin/python -m mcp_server.server` (depuis le dossier du projet).
+
 ## Domaines et fraîcheur
 
 | Domaine | Fraîcheur par défaut |
@@ -97,6 +120,8 @@ app/
   resolver.py    Recherche fraîche via Claude + recherche web
   normalize.py   Normalisation des questions
   config.py      Réglages (durées, quotas, prix, tarifs)
+mcp_server/
+  server.py      Serveur MCP : outil `ask` qui relaie vers l'API
 tests/           Tests automatisés
 docs/VISION.md   Vision, marché, modèle économique, feuille de route
 ```

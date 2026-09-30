@@ -64,3 +64,23 @@
 - **Réponse attendue de 304** : « Achat de 2 ans minimum. Chez Namecheap : 179,96 $ pour 2 ans,
   renouvellement 229,96 $ pour 2 ans. Hausse de 14 % du prix de gros par le registre au 5 mars
   2026. » Avec les sources et la date ; à rafraîchir souvent (domaine `prix`).
+
+## 4. AI Act : report des obligations sur l'IA à haut risque
+
+- **Date** : 30 septembre 2026
+- **Domaine** : `reglementation`
+- **Question** : « À partir de quand s'appliquent les obligations de l'AI Act pour les systèmes d'IA
+  à haut risque ? »
+- **Ce qui s'est passé** : la mémoire de Claude indiquait le **2 août 2026**, la date prévue à
+  l'origine par le règlement. Vérification faite, l'« omnibus numérique » (proposé le 19 novembre
+  2025) a reporté ces obligations au **2 décembre 2027** (annexe III) et au **2 août 2028**
+  (annexe I). Un agent qui répond de mémoire donne donc une date fausse, sur un sujet où l'erreur
+  peut coûter cher à une entreprise.
+- **Source de la bonne réponse** : Commission européenne, AI Act Service Desk
+  (https://ai-act-service-desk.ec.europa.eu/en/ai-act/timeline/timeline-implementation-eu-ai-act),
+  analyses de Gibson Dunn et Winston Taylor. À vérifier au Journal officiel de l'UE : le nouveau
+  calendrier ne s'applique qu'une fois l'omnibus publié.
+- **Réponse attendue de 304** : « Haut risque : 2 décembre 2027 (annexe III) et 2 août 2028
+  (annexe I), après le report voté dans l'omnibus numérique. Les obligations de transparence
+  (article 50) s'appliquent depuis le 2 août 2026, avec un délai au 2 décembre 2026 pour le
+  marquage des contenus des systèmes déjà sur le marché. » Avec les sources et la date.

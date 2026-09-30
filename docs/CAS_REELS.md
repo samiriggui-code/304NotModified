@@ -49,3 +49,18 @@
   `mcp/server/mcpserver/utilities/func_metadata.py`).
 - **Réponse attendue de 304** : « Annotez le type de retour avec des types précis
   (`dict[str, Any]` ou un modèle Pydantic) ; un `dict` nu n'est pas converti en sortie structurée. »
+
+## 3. Tarifs et règles d'achat d'un nom de domaine en `.ai`
+
+- **Date** : 30 septembre 2026
+- **Domaine** : `prix`
+- **Question** : « Combien coûte un nom de domaine en `.ai` et quelles sont les conditions d'achat ? »
+- **Ce qui s'est passé** : au moment de réserver le nom du projet, il a fallu chercher sur le web :
+  la mémoire de Claude ne connaissait pas la hausse de prix de 2026. L'accès direct aux registres
+  (RDAP) était bloqué depuis l'environnement, donc la disponibilité du nom n'a pas pu être vérifiée.
+- **Source de la bonne réponse** : page de prix de Namecheap
+  (https://www.namecheap.com/domains/registration/cctld/ai/) et article de Nominus
+  (https://www.nominus.com/blog/ai-domains-for-tech-startups-and-ai-brands).
+- **Réponse attendue de 304** : « Achat de 2 ans minimum. Chez Namecheap : 179,96 $ pour 2 ans,
+  renouvellement 229,96 $ pour 2 ans. Hausse de 14 % du prix de gros par le registre au 5 mars
+  2026. » Avec les sources et la date ; à rafraîchir souvent (domaine `prix`).

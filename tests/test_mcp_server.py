@@ -89,6 +89,41 @@ def test_mcp_request_is_recorded_with_client_context_and_feedback(api):
     assert row["feedback_useful"] == 0 and row["feedback_issue"] == "outdated"
 
 
+def test_remote_mcp_over_http_uses_the_agent_key(api):
+    from mcp_server.http import create_http_app
+
+    http, _, key = api
+    rpc_headers = {"Accept": "application/json, text/event-stream", "Content-Type": "application/json"}
+
+    def rpc(client, method, params, extra=None):
+        body = {"jsonrpc": "2.0", "id": 1, "method": method, "params": params}
+        return client.post("/mcp", json=body, headers={**rpc_headers, **(extra or {})})
+
+    with TestClient(create_http_app(http), base_url="http://127.0.0.1:8305") as remote:
+        init = rpc(
+            remote,
+            "initialize",
+            {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "agent-http", "version": "2"}},
+        )
+        assert init.status_code == 200 and init.json()["result"]["serverInfo"]["name"] == "304NotModified"
+
+        ask = {"name": "ask", "arguments": {"question": "Quelle est la réponse ?", "domain": "facturation"}}
+        res = rpc(remote, "tools/call", ask, {"X-API-Key": key})
+        assert res.status_code == 200 and res.json()["result"]["structuredContent"]["answer"] == "42"
+        # Sans clé : accès sans clé de l'API.
+        res = rpc(remote, "tools/call", ask)
+        assert res.json()["result"]["structuredContent"]["cached"] is True
+        # Mauvaise clé : erreur lisible qui indique où obtenir une clé.
+        res = rpc(remote, "tools/call", ask, {"X-API-Key": "nm304_faux"})
+        assert res.json()["result"]["isError"] and "/v1/keys" in res.json()["result"]["content"][0]["text"]
+        # Hôte inconnu refusé (protection contre le DNS rebinding).
+        assert rpc(remote, "tools/list", {}, {"Host": "evil.example"}).status_code in (400, 403, 421)
+
+    rows = http.get("/internal/requests", headers=ADMIN).json()
+    assert {r["key_label"] for r in rows} == {"mcp", "Accès sans clé"}
+    assert all(r["channel"] == "mcp" for r in rows)
+
+
 def test_feedback_on_unknown_request_is_an_error(api):
     http, _, key = api
     result = call(create_server(http, key), "feedback", {"request_id": "req_inconnu", "useful": True})

@@ -72,7 +72,7 @@ def test_unanswered_is_logged_and_not_counted(setup):
 
 def test_quota_and_auth(setup):
     client, _, headers = setup
-    assert client.post("/v1/answer", json={"question": "abc"}).status_code == 401
+    assert client.post("/v1/answer", json={"question": "abc"}, headers={"X-API-Key": "nm304_faux"}).status_code == 401
     for i in range(3):
         assert client.post("/v1/answer", json={"question": f"q {i}"}, headers=headers).status_code == 200
     assert client.post("/v1/answer", json={"question": "q 9"}, headers=headers).status_code == 429
@@ -124,7 +124,60 @@ def test_provider_failure_returns_unanswered(tmp_path, monkeypatch):
 
 def test_llms_txt(setup):
     client, _, _ = setup
-    assert "POST /v1/answer" in client.get("/llms.txt").text
+    text = client.get("/llms.txt").text
+    assert "POST https://304notfound.com/v1/answer" in text and "/v1/keys" in text and "/mcp" in text
+    assert "facturation : Facturation électronique" in text
+
+
+def test_public_home_and_domains(setup):
+    client, _, _ = setup
+    home = client.get("/")
+    assert home.status_code == 200 and "text/html" in home.headers["content-type"]
+    assert "304NotModified" in home.text and "/llms.txt" in home.text and "Formation professionnelle" in home.text
+    domains = {d["domain"]: d for d in client.get("/v1/domains").json()}
+    assert domains["facturation"]["specialty"] is True and domains["prix"]["freshness_seconds"] == 3600
+
+
+def test_anonymous_access_is_limited_per_ip(setup, monkeypatch):
+    client, _, _ = setup
+    monkeypatch.setattr(config, "ANON_DAILY_LIMIT", 2)
+    ip = {"X-Forwarded-For": "203.0.113.7"}
+    first = client.post("/v1/answer", json={"question": "Sans clé ?"}, headers=ip)
+    assert first.status_code == 200 and first.json()["status"] == "answered"
+    assert client.post("/v1/answer", json={"question": "Sans clé 2 ?"}, headers=ip).status_code == 200
+    over = client.post("/v1/answer", json={"question": "Sans clé 3 ?"}, headers=ip)
+    assert over.status_code == 429 and "/v1/keys" in over.json()["detail"]
+    # Une autre adresse n'est pas touchée ; le retour sans clé porte sur une requête sans clé.
+    other = client.post("/v1/answer", json={"question": "Autre ?"}, headers={"X-Forwarded-For": "198.51.100.1"})
+    assert other.status_code == 200
+    fb = client.post("/v1/feedback", json={"request_id": first.json()["request_id"], "useful": True})
+    assert fb.status_code == 200
+    # Le mot « anonymous » n'est pas une clé utilisable.
+    assert client.post("/v1/answer", json={"question": "x y z"}, headers={"X-API-Key": "anonymous"}).status_code == 401
+
+
+def test_self_service_key(setup, monkeypatch):
+    client, _, _ = setup
+    monkeypatch.setattr(config, "SELF_SERVICE_PER_IP_PER_DAY", 1)
+    ip = {"X-Forwarded-For": "203.0.113.9"}
+    body = {"agent": "agent-test/1.0", "use_case": "vérifier des dates de réforme", "contact": "dev@exemple.org"}
+    res = client.post("/v1/keys", json=body, headers=ip)
+    assert res.status_code == 200 and res.json()["quota"] == config.SELF_SERVICE_QUOTA
+    key = res.json()["api_key"]
+    # Clé présentée en Bearer.
+    ok = client.post("/v1/answer", json={"question": "Avec clé ?"}, headers={"Authorization": f"Bearer {key}"})
+    assert ok.status_code == 200
+    assert client.post("/v1/keys", json=body, headers=ip).status_code == 429
+
+    keys = {k["label"]: k for k in client.get("/internal/keys", headers=ADMIN).json()}
+    mine = keys["agent-test/1.0"]
+    assert (mine["origin"], mine["use_case"], mine["contact"], mine["used"]) == (
+        "self",
+        "vérifier des dates de réforme",
+        "dev@exemple.org",
+        1,
+    )
+    assert mine["last_used"] is not None and keys["Accès sans clé"]["origin"] == "anonymous"
 
 
 def test_dashboard_data_requires_admin(setup):
@@ -146,7 +199,7 @@ def test_dashboard_data(setup):
     [answer] = client.get("/internal/answers", headers=ADMIN).json()
     assert answer["answer"] == "42" and answer["sources"][0]["url"] == "https://exemple.org/source"
 
-    [key] = client.get("/internal/keys", headers=ADMIN).json()
+    [key] = [k for k in client.get("/internal/keys", headers=ADMIN).json() if k["origin"] == "admin"]
     assert key["label"] == "test" and key["used"] == 1
     assert key["key"] == headers["X-API-Key"][:12] + "…"  # jamais la clé complète
 
@@ -175,7 +228,9 @@ def test_feedback_is_recorded_only_for_own_requests(setup):
 
     fb = {"request_id": request_id, "useful": False, "issue": "wrong", "comment": "date fausse"}
     assert client.post("/v1/feedback", json=fb, headers={"X-API-Key": other}).status_code == 404
-    assert client.post("/v1/feedback", json=fb).status_code == 401
+    # Sans clé, seul un retour sur une requête faite sans clé est accepté.
+    assert client.post("/v1/feedback", json=fb).status_code == 404
+    assert client.post("/v1/feedback", json=fb, headers={"X-API-Key": "nm304_faux"}).status_code == 401
     assert client.post("/v1/feedback", json=fb, headers=headers).status_code == 200
 
     [item] = client.get("/internal/feedback", headers=ADMIN).json()

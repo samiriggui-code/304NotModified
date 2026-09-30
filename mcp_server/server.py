@@ -3,8 +3,11 @@
 Il ne fait que relayer les questions vers l'API HTTP (`POST /v1/answer`) avec la clé de l'agent.
 Il n'a aucun accès direct à la base : un agent ne peut que poser des questions, jamais écrire.
 
-Lancement (transport stdio) :
-    NM304_URL=https://… NM304_API_KEY=nm304_… python -m mcp_server.server
+Deux façons de le servir :
+- en local (transport stdio), la clé venant de l'environnement :
+      NM304_URL=https://… NM304_API_KEY=nm304_… python -m mcp_server.server
+- à distance (Streamable HTTP, voir mcp_server/http.py), la clé venant de l'en-tête X-API-Key
+  (ou Authorization: Bearer) de chaque agent. Sans clé, l'API applique sa limite d'accès sans clé.
 """
 
 import os
@@ -31,20 +34,36 @@ Après avoir utilisé une réponse, appelez l'outil « feedback » avec son requ
 vous a servi : c'est ce qui permet d'améliorer le service. N'envoyez pas de données personnelles."""
 
 
-def create_server(http: httpx.Client, api_key: str) -> MCPServer:
-    server = MCPServer(name="304NotModified", version="0.1.0", instructions=INSTRUCTIONS)
+def create_server(http: httpx.Client, api_key: str | None = None, *, remote: bool = False) -> MCPServer:
+    """`remote` : la clé et l'adresse de l'agent viennent des en-têtes HTTP de sa connexion."""
+    server = MCPServer(name="304NotModified", version="0.2.0", instructions=INSTRUCTIONS)
+
+    def agent_headers(ctx: Context) -> dict[str, str]:
+        if not remote:
+            return {"X-API-Key": api_key} if api_key else {}
+        incoming = ctx.headers or {}
+        key = incoming.get("x-api-key", "").strip()
+        auth = incoming.get("authorization", "")
+        if not key and auth.lower().startswith("bearer "):
+            key = auth[7:].strip()
+        out = {"X-API-Key": key} if key else {}
+        # L'adresse de l'agent (posée par Traefik) sert à la limite d'accès sans clé.
+        if incoming.get("x-forwarded-for"):
+            out["X-Forwarded-For"] = incoming["x-forwarded-for"]
+        return out
 
     def call(path: str, body: dict, ctx: Context) -> dict[str, Any]:
-        headers = {"X-API-Key": api_key, "X-Client": "mcp:" + _client_name(ctx)}
+        headers = {**agent_headers(ctx), "X-Client": "mcp:" + _client_name(ctx)}
         try:
             response = http.post(path, json=body, headers=headers)
         except httpx.HTTPError as exc:
             raise ToolError(f"Service 304NotModified injoignable : {exc.__class__.__name__}.") from exc
 
         if response.status_code == 401:
-            raise ToolError("Clé d'API absente ou inconnue : vérifiez NM304_API_KEY.")
+            where = "l'en-tête X-API-Key" if remote else "NM304_API_KEY"
+            raise ToolError(f"Clé d'API inconnue : vérifiez {where}. Clé gratuite : POST {config.PUBLIC_URL}/v1/keys.")
         if response.status_code == 429:
-            raise ToolError("Quota épuisé pour cette clé d'API.")
+            raise ToolError(_detail(response) or "Quota épuisé pour cette clé d'API.")
         if response.status_code == 404:
             raise ToolError("request_id inconnu pour cette clé.")
         if response.status_code == 422:
@@ -93,6 +112,14 @@ def create_server(http: httpx.Client, api_key: str) -> MCPServer:
     return server
 
 
+def _detail(response: httpx.Response) -> str | None:
+    try:
+        detail = response.json().get("detail")
+    except ValueError:
+        return None
+    return detail if isinstance(detail, str) else None
+
+
 def _client_name(ctx: Context) -> str:
     """Nom et version annoncés par l'agent à la connexion (« inconnu » s'il ne s'est pas présenté)."""
     try:
@@ -103,9 +130,8 @@ def _client_name(ctx: Context) -> str:
 
 
 def main() -> None:
-    api_key = os.environ.get("NM304_API_KEY", "")
-    if not api_key:
-        raise SystemExit("NM304_API_KEY manquante : demandez une clé d'API à l'administrateur.")
+    # Sans clé, l'agent profite de l'accès sans clé de l'API (quelques questions par jour).
+    api_key = os.environ.get("NM304_API_KEY", "") or None
     base_url = os.environ.get("NM304_URL", DEFAULT_URL).rstrip("/")
     with httpx.Client(base_url=base_url, timeout=TIMEOUT_SECONDS) as http:
         create_server(http, api_key).run("stdio")

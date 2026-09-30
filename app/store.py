@@ -73,6 +73,12 @@ MIGRATIONS = {
         "context": "TEXT",  # ce que l'agent était en train de faire, s'il l'a dit
         "answer_version_id": "INTEGER",
     },
+    "api_keys": {
+        "origin": "TEXT",  # admin (créée depuis le tableau de bord) | self (demandée par l'agent)
+        "use_case": "TEXT",  # ce que l'agent dit vouloir en faire
+        "contact": "TEXT",  # facultatif, donné par l'agent
+        "last_used": "REAL",
+    },
 }
 
 
@@ -106,19 +112,40 @@ class Store:
 
     # --- clés d'API -------------------------------------------------------
 
-    def create_key(self, label: str, quota: int) -> str:
-        key = "nm304_" + secrets.token_urlsafe(24)
+    def create_key(
+        self,
+        label: str,
+        quota: int,
+        *,
+        origin: str = "admin",
+        use_case: str | None = None,
+        contact: str | None = None,
+        key: str | None = None,
+    ) -> str:
+        key = key or "nm304_" + secrets.token_urlsafe(24)
         with self._lock:
             self._db.execute(
-                "INSERT INTO api_keys (key, label, quota, created_at) VALUES (?, ?, ?, ?)",
-                (key, label, quota, time.time()),
+                """INSERT OR IGNORE INTO api_keys (key, label, quota, created_at, origin, use_case, contact)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (key, label, quota, time.time(), origin, use_case, contact),
             )
             self._db.commit()
         return key
 
+    def count_keys_since(self, origin: str, since: float) -> int:
+        with self._lock:
+            return self._db.execute(
+                "SELECT COUNT(*) FROM api_keys WHERE origin = ? AND created_at >= ?", (origin, since)
+            ).fetchone()[0]
+
     def get_key(self, key: str) -> sqlite3.Row | None:
         with self._lock:
             return self._db.execute("SELECT * FROM api_keys WHERE key = ?", (key,)).fetchone()
+
+    def touch_key(self, key: str) -> None:
+        with self._lock:
+            self._db.execute("UPDATE api_keys SET last_used = ? WHERE key = ?", (time.time(), key))
+            self._db.commit()
 
     def consume(self, key: str) -> None:
         with self._lock:
@@ -168,7 +195,9 @@ class Store:
     def list_keys(self) -> list[dict]:
         with self._lock:
             rows = self._db.execute(
-                "SELECT key, label, quota, used, created_at FROM api_keys ORDER BY created_at DESC"
+                """SELECT key, label, quota, used, created_at, COALESCE(origin, 'admin') AS origin,
+                          use_case, contact, last_used
+                   FROM api_keys ORDER BY created_at DESC"""
             ).fetchall()
         # La clé complète n'est montrée qu'à sa création : ici, seulement son début.
         return [{**dict(r), "key": r["key"][:12] + "…"} for r in rows]

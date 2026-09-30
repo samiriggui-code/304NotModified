@@ -7,11 +7,12 @@ import time
 from typing import Literal
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse
 from pydantic import BaseModel, Field
 
 from . import admin_auth, config
 from .normalize import question_key
+from .public import home_page, llms_text
 from .resolver import ClaudeResolver, NullResolver, Resolution, Resolver
 from .store import CachedAnswer, Store
 
@@ -47,46 +48,31 @@ class KeyRequest(BaseModel):
     quota: int = Field(default=config.FREE_QUOTA, ge=1)
 
 
-LLMS_TXT = f"""# 304NotModified (version d'essai)
+class SelfServiceKeyRequest(BaseModel):
+    agent: str = Field(min_length=1, max_length=100, description="Nom (et version) de votre agent ou de votre outil.")
+    use_case: str | None = Field(
+        default=None,
+        max_length=500,
+        description="Facultatif : à quoi vont servir vos questions (sans données personnelles).",
+    )
+    contact: str | None = Field(
+        default=None, max_length=200, description="Facultatif : une adresse ou une page pour vous joindre."
+    )
 
-> Réponses factuelles vérifiées, sourcées et datées, partagées entre agents.
-> Une question déjà résolue par un autre agent est servie immédiatement depuis le cache.
-> Spécialité : la facturation électronique française sous tous ses aspects (domaine « facturation ») :
-> réglementation (qui, quand, obligations), technique (Factur-X, UBL, CII, normes AFNOR XP Z12-012/013/014),
-> intégration (API des plateformes agréées, annuaire, Peppol) et process (statuts de cycle de vie,
-> rejets, avoirs, e-reporting, archivage). Toujours avec la version et la date des sources officielles.
-> Deuxième spécialité : la formation professionnelle (domaine « formation ») : Qualiopi (référentiel
-> national qualité, guide de lecture, audits), CPF et EDOF, OPCO, RNCP et Répertoire spécifique.
-> Aussi : impôts, finances (banque, épargne, taux réglementés), vie quotidienne (démarches, aides),
-> droit en vigueur, réglementation des entreprises. Toujours à partir des sources officielles françaises
-> et européennes, avec les dates d'application.
-> Information générale : pas de conseil juridique, fiscal ou financier personnalisé.
 
-## Utilisation
-POST /v1/answer
-En-tête : X-API-Key: <clé>
-Corps JSON : {{"question": "...", "domain": "facultatif"}}
-Domaines : {", ".join(sorted(config.DOMAIN_TTL_SECONDS))}
+class DailyCounter:
+    """Compteur par adresse IP et par jour, en mémoire (remis à zéro au redémarrage)."""
 
-Corps JSON complet : {{"question": "...", "domain": "facultatif", "context": "facultatif : votre tâche en cours"}}
-En-tête facultatif : X-Client: <nom et version de votre agent>
+    def __init__(self):
+        self._day = ""
+        self._counts: dict[str, int] = {}
 
-Réponse : status (answered | unanswered), request_id, answer, sources [url, title], confidence (0-1),
-domain, cached (bool), fetched_at et expires_at (horodatages Unix).
-Vérifiez vous-même les sources si l'enjeu est important : confidence est une estimation.
-
-## Dire si la réponse vous a servi
-POST /v1/feedback (même clé)
-Corps JSON : {{"request_id": "...", "useful": true, "issue": "wrong | outdated | incomplete | bad_source | other",
-"comment": "facultatif"}}
-Votre retour est lu par l'équipe pour améliorer le service ; il ne modifie jamais directement une réponse.
-
-## Données enregistrées
-Chaque requête est enregistrée (question, contexte, réponse servie, nom de l'agent) pour améliorer
-le service, puis effacée après {config.LOG_RETENTION_DAYS} jours. N'envoyez pas de données personnelles.
-
-Documentation OpenAPI : /docs et /openapi.json
-"""
+    def hit(self, who: str) -> int:
+        today = time.strftime("%Y-%m-%d")
+        if today != self._day:
+            self._day, self._counts = today, {}
+        self._counts[who] = self._counts.get(who, 0) + 1
+        return self._counts[who]
 
 
 def create_app(store: Store | None = None, resolver: Resolver | None = None) -> FastAPI:
@@ -95,15 +81,52 @@ def create_app(store: Store | None = None, resolver: Resolver | None = None) -> 
     if resolver is None:
         resolver = ClaudeResolver() if os.environ.get("ANTHROPIC_API_KEY") else NullResolver()
 
-    app = FastAPI(title="304NotModified", version="0.1.0")
+    app = FastAPI(
+        title="304NotModified",
+        version="0.2.0",
+        description=(
+            "Réponses factuelles vérifiées, sourcées et datées, partagées entre agents IA. "
+            f"Guide pour les agents : {config.PUBLIC_URL}/llms.txt"
+        ),
+    )
     app.state.store = store
+    # Compte technique des requêtes faites sans clé (quelques questions par jour et par adresse IP).
+    store.create_key("Accès sans clé", 10**12, origin="anonymous", key=config.ANON_KEY)
+    anon_counter = DailyCounter()
+    signup_counter = DailyCounter()
 
-    def require_key(x_api_key: str = Header(default="")):
-        row = store.get_key(x_api_key) if x_api_key else None
-        if row is None:
-            raise HTTPException(401, "Clé d'API absente ou inconnue.")
+    def client_ip(request: Request) -> str:
+        # Derrière Traefik, la première adresse de X-Forwarded-For est celle du client.
+        forwarded = request.headers.get("x-forwarded-for", "")
+        return forwarded.split(",")[0].strip() or (request.client.host if request.client else "?")
+
+    def presented_key(request: Request) -> str:
+        key = request.headers.get("x-api-key", "").strip()
+        auth = request.headers.get("authorization", "")
+        if not key and auth.lower().startswith("bearer "):
+            key = auth[7:].strip()
+        return key
+
+    def require_key(request: Request):
+        key = presented_key(request)
+        if not key:
+            if config.ANON_DAILY_LIMIT <= 0:
+                raise HTTPException(
+                    401, f"Clé d'API requise : obtenez-en une gratuitement, POST {config.PUBLIC_URL}/v1/keys."
+                )
+            if anon_counter.hit(client_ip(request)) > config.ANON_DAILY_LIMIT:
+                raise HTTPException(
+                    429,
+                    f"Limite de {config.ANON_DAILY_LIMIT} questions par jour sans clé atteinte. "
+                    f"Clé gratuite : POST {config.PUBLIC_URL}/v1/keys (voir {config.PUBLIC_URL}/llms.txt).",
+                )
+            return config.ANON_KEY
+        row = store.get_key(key)
+        if row is None or key == config.ANON_KEY:
+            raise HTTPException(401, "Clé d'API inconnue.")
         if row["used"] >= row["quota"]:
             raise HTTPException(429, "Quota épuisé pour cette clé.")
+        store.touch_key(key)
         return row["key"]
 
     throttle = admin_auth.LoginThrottle()
@@ -122,9 +145,47 @@ def create_app(store: Store | None = None, resolver: Resolver | None = None) -> 
     def health():
         return {"status": "ok", "resolver": type(resolver).__name__}
 
+    @app.get("/", response_class=HTMLResponse, include_in_schema=False)
+    def home():
+        return home_page()
+
     @app.get("/llms.txt", response_class=PlainTextResponse)
     def llms_txt():
-        return LLMS_TXT
+        return llms_text()
+
+    @app.get("/v1/domains", summary="Domaines couverts et durée de fraîcheur de leurs réponses")
+    def public_domains():
+        return [
+            {
+                "domain": d,
+                "label": config.DOMAIN_LABELS.get(d, (d, ""))[0],
+                "description": config.DOMAIN_LABELS.get(d, (d, ""))[1],
+                "specialty": d in config.DOMAIN_GUIDANCE,
+                "freshness_seconds": ttl,
+            }
+            for d, ttl in config.DOMAIN_TTL_SECONDS.items()
+        ]
+
+    @app.post("/v1/keys", summary="Obtenir une clé d'API gratuite (sans inscription)")
+    def self_service_key(body: SelfServiceKeyRequest, request: Request):
+        if signup_counter.hit(client_ip(request)) > config.SELF_SERVICE_PER_IP_PER_DAY:
+            raise HTTPException(429, "Trop de clés demandées depuis cette adresse aujourd'hui.")
+        if store.count_keys_since("self", time.time() - 86400) >= config.SELF_SERVICE_MAX_PER_DAY:
+            raise HTTPException(429, "Trop de clés demandées aujourd'hui : réessayez demain.")
+        key = store.create_key(
+            body.agent.strip(),
+            config.SELF_SERVICE_QUOTA,
+            origin="self",
+            use_case=(body.use_case or "").strip() or None,
+            contact=(body.contact or "").strip() or None,
+        )
+        return {
+            "api_key": key,
+            "quota": config.SELF_SERVICE_QUOTA,
+            "usage": f"En-tête X-API-Key: {key} sur POST {config.PUBLIC_URL}/v1/answer",
+            "mcp": f"{config.PUBLIC_URL}/mcp (en-tête X-API-Key)",
+            "note": "Gardez cette clé : elle ne sera plus affichée. Les questions sans réponse ne sont pas décomptées.",
+        }
 
     @app.post("/v1/answer")
     def answer(
@@ -189,13 +250,15 @@ def create_app(store: Store | None = None, resolver: Resolver | None = None) -> 
         return _payload(fresh, cached=False, request_id=request_id)
 
     @app.post("/v1/feedback")
-    def feedback(body: FeedbackRequest, x_api_key: str = Header(default="")):
+    def feedback(body: FeedbackRequest, request: Request):
         # Pas de contrôle de quota : un retour ne coûte rien et ne doit jamais être refusé pour ça.
-        if not x_api_key or store.get_key(x_api_key) is None:
-            raise HTTPException(401, "Clé d'API absente ou inconnue.")
+        # Sans clé, le retour porte sur une requête faite elle aussi sans clé.
+        api_key = presented_key(request) or config.ANON_KEY
+        if store.get_key(api_key) is None:
+            raise HTTPException(401, "Clé d'API inconnue.")
         if not store.add_feedback(
             request_id=body.request_id,
-            api_key=x_api_key,
+            api_key=api_key,
             useful=body.useful,
             issue=body.issue,
             comment=body.comment,

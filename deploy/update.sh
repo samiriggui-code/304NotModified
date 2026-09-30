@@ -15,9 +15,14 @@ sudo -u "$APP_USER" git -C "$APP_DIR" pull --ff-only
 sudo -u "$APP_USER" "$APP_DIR/.venv/bin/pip" install -q -r "$APP_DIR/requirements.txt"
 sudo -u "$APP_USER" env PATH="$NODE_DIR/bin:/usr/local/bin:/usr/bin:/bin" HOME="/home/$APP_USER" \
   bash "$APP_DIR/deploy/build-admin.sh"
-systemctl restart 304notmodified 304notmodified-admin
+# Le service MCP distant n'existe qu'après un install.sh récent : relancer install.sh s'il manque.
+SERVICES="304notmodified 304notmodified-admin"
+[ -f /etc/systemd/system/304notmodified-mcp.service ] && SERVICES="$SERVICES 304notmodified-mcp"
+# shellcheck disable=SC2086
+systemctl restart $SERVICES
 sleep 3
-systemctl --no-pager --lines=0 status 304notmodified 304notmodified-admin
+# shellcheck disable=SC2086
+systemctl --no-pager --lines=0 status $SERVICES
 # Adresse d'écoute écrite par install.sh (passerelle du réseau Docker de Traefik).
 BIND_IP="$(sed -n 's/.*--host \([0-9.]*\).*/\1/p' /etc/systemd/system/304notmodified.service)"
 curl -fsS "http://$BIND_IP:8304/health" && echo

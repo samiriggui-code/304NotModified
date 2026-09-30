@@ -165,6 +165,8 @@ touch "$ENV_FILE" && chown root:"$APP_USER" "$ENV_FILE" && chmod 640 "$ENV_FILE"
 [ -n "$(env_get NM304_DB)" ] || env_set NM304_DB "$DATA_DIR/304notmodified.sqlite3"
 [ -n "$(env_get FREE_QUOTA)" ] || env_set FREE_QUOTA 1000
 [ -n "$(env_get PRICE_PER_REQUEST_EUR)" ] || env_set PRICE_PER_REQUEST_EUR 0.005
+# Adresse publique : page d'accueil, llms.txt et messages envoyés aux agents.
+env_set PUBLIC_URL "https://$DOMAIN"
 # Vide = aucune recherche payante : les questions sont seulement enregistrées (mesure de la demande).
 grep -q '^ANTHROPIC_API_KEY=' "$ENV_FILE" || env_set ANTHROPIC_API_KEY ""
 [ -n "$(env_get SESSION_SECRET)" ] || env_set SESSION_SECRET "$(openssl rand -hex 32)"
@@ -230,9 +232,33 @@ ReadWritePaths=$APP_DIR/admin/.next/standalone/.next
 [Install]
 WantedBy=multi-user.target
 EOF
+cat > /etc/systemd/system/304notmodified-mcp.service <<EOF
+$MARKER
+[Unit]
+Description=304NotModified (serveur MCP distant, relaie vers l'API)
+After=network-online.target docker.service 304notmodified.service
+Wants=network-online.target
+
+[Service]
+User=$APP_USER
+Group=$APP_USER
+WorkingDirectory=$APP_DIR
+EnvironmentFile=$ENV_FILE
+Environment=NM304_URL=http://$BIND_IP:8304
+ExecStart=$APP_DIR/.venv/bin/uvicorn mcp_server.http:create_http_app --factory --host $BIND_IP --port 8305
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target
+EOF
 systemctl daemon-reload
-systemctl enable -q 304notmodified 304notmodified-admin
-systemctl restart 304notmodified 304notmodified-admin
+systemctl enable -q 304notmodified 304notmodified-admin 304notmodified-mcp
+systemctl restart 304notmodified 304notmodified-admin 304notmodified-mcp
 
 say "10/10 Routes HTTPS dans le Traefik existant"
 ROUTES="$DYN_DIR/304notmodified.yaml"
@@ -243,12 +269,12 @@ fi
 # Modèle écrit tel quel (aucune substitution du shell), puis les jetons __…__ sont remplacés.
 read -r -d '' ROUTES_TPL <<'YAML' || true
 __MARKER__
-# API et MCP pour les agents : tout le domaine, sauf /admin (tableau de bord) et /internal (jamais routé).
-# Tableau de bord du propriétaire : /admin. Les deux services tournent sur la machine, pas en conteneur.
+# API pour les agents : tout le domaine, sauf /admin (tableau de bord), /mcp (serveur MCP distant)
+# et /internal (jamais routé). Les trois services tournent sur la machine, pas en conteneur.
 http:
   routers:
     nm304-api:
-      rule: "Host(`__DOMAIN__`) && !PathPrefix(`/internal`) && !PathPrefix(`/admin`)"
+      rule: "Host(`__DOMAIN__`) && !PathPrefix(`/internal`) && !PathPrefix(`/admin`) && !PathPrefix(`/mcp`)"
       entryPoints: [websecure]
       service: nm304-api
       tls:
@@ -257,6 +283,12 @@ http:
       rule: "Host(`__DOMAIN__`) && PathPrefix(`/admin`)"
       entryPoints: [websecure]
       service: nm304-admin
+      tls:
+        certResolver: __RESOLVER__
+    nm304-mcp:
+      rule: "Host(`__DOMAIN__`) && PathPrefix(`/mcp`)"
+      entryPoints: [websecure]
+      service: nm304-mcp
       tls:
         certResolver: __RESOLVER__
   services:
@@ -268,6 +300,10 @@ http:
       loadBalancer:
         servers:
           - url: "http://__BIND__:3304"
+    nm304-mcp:
+      loadBalancer:
+        servers:
+          - url: "http://__BIND__:8305"
 YAML
 # Redirection de www.<domaine> vers le domaine, seulement si www pointe déjà sur le VPS
 # (sinon Let's Encrypt échouerait en boucle sur www).
@@ -310,7 +346,8 @@ docker kill -s HUP "$TRAEFIK_CT" >/dev/null 2>&1 || true
 if command -v ufw >/dev/null && ufw status | grep -q "Status: active" && [ -n "$BRIDGE_IF" ]; then
   ufw allow in on "$BRIDGE_IF" to "$BIND_IP" port 8304 proto tcp >/dev/null
   ufw allow in on "$BRIDGE_IF" to "$BIND_IP" port 3304 proto tcp >/dev/null
-  echo "   Pare-feu : ports 8304 et 3304 ouverts au seul réseau Docker $TRAEFIK_NET."
+  ufw allow in on "$BRIDGE_IF" to "$BIND_IP" port 8305 proto tcp >/dev/null
+  echo "   Pare-feu : ports 8304, 3304 et 8305 ouverts au seul réseau Docker $TRAEFIK_NET."
 fi
 
 say "Vérification"
@@ -323,8 +360,12 @@ check "API (attendu 200)" "https://$DOMAIN/health"
 check "Tableau de bord (attendu 200)" "https://$DOMAIN/admin/signin"
 check "Routes internes bloquées (attendu 404)" "https://$DOMAIN/internal/stats"
 check "API non joignable en direct (attendu 000)" "http://${SERVER_IP:-127.0.0.1}:8304/health"
+printf '   %-44s %s\n' "Serveur MCP (attendu 200)" "$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 \
+  -X POST "https://$DOMAIN/mcp" -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"install","version":"1"}}}')"
 echo
 echo "   API pour les agents : https://$DOMAIN  (documentation : https://$DOMAIN/docs)"
+echo "   Serveur MCP         : https://$DOMAIN/mcp"
 echo "   Tableau de bord     : https://$DOMAIN/admin"
 echo "   Routes Traefik      : $ROUTES"
 echo "   En cas de souci     : journalctl -u 304notmodified -u 304notmodified-admin -n 80 ; docker logs --tail 80 $TRAEFIK_CT"

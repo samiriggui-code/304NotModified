@@ -148,6 +148,19 @@ SESSION_SECRET = os.environ.get("SESSION_SECRET", "")
 # Quota gratuit par clé (requêtes). Les questions restées sans réponse ne sont pas décomptées.
 FREE_QUOTA = int(os.environ.get("FREE_QUOTA", "1000"))
 
+# Adresse publique du service (page d'accueil, llms.txt, messages aux agents).
+PUBLIC_URL = os.environ.get("PUBLIC_URL", "https://304notfound.com").rstrip("/")
+
+# Accès sans clé : quelques questions par jour et par adresse IP, pour qu'un agent essaie sans démarche.
+# 0 = accès sans clé désactivé.
+ANON_DAILY_LIMIT = int(os.environ.get("ANON_DAILY_LIMIT", "20"))
+ANON_KEY = "anonymous"
+
+# Clé gratuite en libre-service (POST /v1/keys) : quota de la clé, et garde-fous contre les abus.
+SELF_SERVICE_QUOTA = int(os.environ.get("SELF_SERVICE_QUOTA", "200"))
+SELF_SERVICE_PER_IP_PER_DAY = int(os.environ.get("SELF_SERVICE_PER_IP_PER_DAY", "3"))
+SELF_SERVICE_MAX_PER_DAY = int(os.environ.get("SELF_SERVICE_MAX_PER_DAY", "300"))
+
 # Prix de vente théorique, utilisé uniquement pour estimer le revenu dans /v1/stats.
 PRICE_PER_REQUEST_EUR = float(os.environ.get("PRICE_PER_REQUEST_EUR", "0.005"))
 

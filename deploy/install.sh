@@ -99,11 +99,17 @@ DYN_DIR="$(docker inspect -f "{{range .Mounts}}{{if eq .Destination \"$DYN_TARGE
 CERT_RESOLVER="$(echo "$TRAEFIK_ARGS" | sed -n 's/^--certificatesresolvers\.\([^.]*\)\..*/\1/p' | head -n1)"
 [ -n "$CERT_RESOLVER" ] || stop "aucun certificatesresolver dans la configuration de Traefik."
 echo "$TRAEFIK_ARGS" | grep -q '^--entrypoints\.websecure\.address=' || stop "Traefik n'a pas d'entrée « websecure »."
-# Passerelle du réseau Docker de Traefik : adresse d'écoute des deux services.
+# Adresse d'écoute des deux services : 127.0.0.1 si Traefik partage le réseau de la machine
+# (network_mode: host), sinon la passerelle de son réseau Docker.
 TRAEFIK_NET="$(docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' "$TRAEFIK_CT" | awk '{print $1}')"
-BIND_IP="$(docker network inspect -f '{{range .IPAM.Config}}{{.Gateway}} {{end}}' "$TRAEFIK_NET" | awk '{print $1}')"
-[ -n "$BIND_IP" ] || stop "passerelle du réseau Docker « $TRAEFIK_NET » introuvable."
+if [ "$TRAEFIK_NET" = "host" ]; then
+  BIND_IP="127.0.0.1"
+else
+  BIND_IP="$(docker network inspect -f '{{range .IPAM.Config}}{{.Gateway}} {{end}}' "$TRAEFIK_NET" | awk '{print $1}')"
+  [ -n "$BIND_IP" ] || stop "passerelle du réseau Docker « $TRAEFIK_NET » introuvable."
+fi
 BRIDGE_IF="$(ip -4 -o addr show | awk -v ip="$BIND_IP" 'index($4, ip "/") == 1 {print $2; exit}')"
+[ "$BIND_IP" = "127.0.0.1" ] && BRIDGE_IF=""
 echo "   Conteneur : $TRAEFIK_CT ; routes : $DYN_DIR ; certificat : $CERT_RESOLVER"
 echo "   Réseau : $TRAEFIK_NET (interface ${BRIDGE_IF:-?}) ; les services écouteront sur $BIND_IP"
 

@@ -495,8 +495,62 @@ class Store:
                 ).fetchall()
             )
 
+            def latency_quantile(fraction: float) -> int | None:
+                # Rang le plus proche : la moyenne cache les requêtes lentes, la médiane et le 95e centile non.
+                if not total:
+                    return None
+                return q(
+                    f"""SELECT latency_ms FROM (SELECT * FROM requests WHERE ts >= ?) AS requests
+                        ORDER BY latency_ms LIMIT 1 OFFSET {int((total - 1) * fraction)}"""
+                ).fetchone()[0]
+
+            latency = {"p50": latency_quantile(0.5), "p95": latency_quantile(0.95)}
+            # Coût par résultat : recherches abouties, recherches sans réponse (dépense perdue), et
+            # recherches qui remplacent une réponse déjà produite pour la même question (rafraîchissement).
+            cost_by_outcome = dict(
+                q(
+                    """SELECT outcome, COALESCE(SUM(cost_eur), 0) FROM (SELECT * FROM requests WHERE ts >= ?) AS requests
+                       GROUP BY outcome"""
+                ).fetchall()
+            )
+            refresh = q(
+                """SELECT COUNT(*), COALESCE(SUM(cost_eur), 0) FROM (SELECT * FROM requests WHERE ts >= ?) AS requests
+                   WHERE outcome = 'miss' AND EXISTS (
+                       SELECT 1 FROM requests p WHERE p.key = requests.key AND p.outcome = 'miss' AND p.id < requests.id)"""
+            ).fetchone()
+            # Clients techniques (clés d'API, hors accès sans clé partagé) et ceux qui reviennent un autre jour.
+            clients_activity = q(
+                """SELECT COUNT(*) AS active, COALESCE(SUM(days >= 2), 0) AS returning_clients FROM (
+                       SELECT COUNT(DISTINCT CAST(ts / 86400 AS INTEGER)) AS days
+                       FROM (SELECT * FROM requests WHERE ts >= ?) AS requests
+                       WHERE api_key NOT IN (SELECT key FROM api_keys WHERE origin = 'anonymous')
+                       GROUP BY api_key)"""
+            ).fetchone()
+            # Réponses servies depuis la mémoire puis signalées fausses, périmées, hors sujet ou contredites :
+            # la mesure des erreurs de réutilisation (un taux de cache élevé ne vaut rien sans elle).
+            reuse_errors = q(
+                """SELECT COUNT(*) FROM (SELECT * FROM feedback WHERE ts >= ?) AS feedback
+                   JOIN requests r ON r.request_id = feedback.request_id
+                   WHERE r.outcome = 'hit' AND feedback.useful = 0
+                     AND feedback.issue IN ('wrong', 'outdated', 'off_topic', 'contradiction')"""
+            ).fetchone()[0]
+
         answered = by_outcome.get("hit", 0) + by_outcome.get("miss", 0)
         revenue = answered * price_per_request_eur
+        hits, misses = by_outcome.get("hit", 0), by_outcome.get("miss", 0)
+        avg_search_cost = cost_by_outcome.get("miss", 0.0) / misses if misses else None
+        economics = {
+            "cost_per_answer_eur": round(cost / answered, 6) if answered else None,
+            # Retours « utile » seulement : sans retour, pas de chiffre plutôt qu'un chiffre trompeur.
+            "cost_per_useful_answer_eur": round(cost / fb["useful"], 6) if fb["useful"] else None,
+            "avg_search_cost_eur": round(avg_search_cost, 6) if avg_search_cost is not None else None,
+            "unanswered_cost_eur": round(cost_by_outcome.get("unanswered", 0.0), 4),
+            "refresh_searches": refresh[0],
+            "refresh_cost_eur": round(refresh[1], 4),
+            "avoided_searches": hits,
+            # Estimation : réponses servies depuis la mémoire × coût moyen observé d'une recherche aboutie.
+            "estimated_avoided_cost_eur": round(hits * avg_search_cost, 4) if avg_search_cost is not None else None,
+        }
         return {
             "requests": total,
             "distinct_questions": distinct,
@@ -505,6 +559,12 @@ class Store:
             "cache_hit_rate": round(by_outcome.get("hit", 0) / answered, 3) if answered else 0.0,
             "outcomes": by_outcome,
             "avg_latency_ms": avg_latency,
+            "latency_ms": latency,
+            "economics": economics,
+            "clients_activity": {
+                "active": clients_activity["active"],
+                "returning": clients_activity["returning_clients"],
+            },
             "estimated_revenue_eur": round(revenue, 4),
             "estimated_cost_eur": round(cost, 4),
             "estimated_margin_eur": round(revenue - cost, 4),
@@ -519,6 +579,7 @@ class Store:
                 "count": fb["n"],
                 "useful_rate": round(fb["useful"] / fb["n"], 3) if fb["n"] else 0.0,
                 "issues": fb_issues,
+                "reuse_errors": reuse_errors,
             },
         }
 

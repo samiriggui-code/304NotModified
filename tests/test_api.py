@@ -249,6 +249,8 @@ def test_feedback_is_recorded_only_for_own_requests(setup):
         "count": 1,
         "useful_rate": 0.0,
         "issues": {"wrong": 1},
+        # Le retour porte sur une recherche fraîche, pas sur une réponse resservie depuis la mémoire.
+        "reuse_errors": 0,
     }
 
 

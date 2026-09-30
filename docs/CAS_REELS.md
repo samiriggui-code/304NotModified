@@ -205,3 +205,52 @@
 - **Source de la bonne réponse** : essai ; la conversion se désactive avec `MSYS_NO_PATHCONV=1`.
 - **Réponse attendue de 304** : « Préfixez la commande : `MSYS_NO_PATHCONV=1
   NEXT_PUBLIC_BASE_PATH=/admin npm run build`, ou lancez-la depuis PowerShell. »
+
+## 12. x402 : le dépôt de référence n'est plus `coinbase/x402`
+
+- **Date** : 30 septembre 2026
+- **Domaine** : `logiciel`
+- **Question** : « Où se trouvent la spécification et le SDK à jour du protocole de paiement x402 ? »
+- **Ce qui s'est passé** : la mission citait `github.com/coinbase/x402`. L'API GitHub montre que ce
+  dépôt est désormais une **copie** (`fork`) de `x402-foundation/x402`, alignée pour la dernière fois le
+  21 avril 2026 (« bump main to match foundation repo »). Le projet vivant est
+  `x402-foundation/x402` (spécification v2, versions publiées jusqu'au 29 septembre 2026). Autre écart
+  relevé : le dépôt est sous licence Apache-2.0, alors que le paquet Python `x402` 2.25.0 se déclare MIT.
+- **Source de la bonne réponse** : `gh api repos/coinbase/x402` (champs `fork`, `parent`) et
+  https://github.com/x402-foundation/x402.
+- **Réponse attendue de 304** : « x402 est maintenu par la x402 Foundation :
+  https://github.com/x402-foundation/x402 (spécification v2 dans `specs/`, SDK Python `x402` 2.25.0,
+  encore marqué Alpha). `coinbase/x402` n'est plus qu'une copie. Vérifiez la licence (Apache-2.0 pour
+  le dépôt, MIT déclaré par le paquet Python) avant de reprendre du code. »
+
+## 13. Parallel : les résultats ne peuvent pas être mis en cache ni partagés
+
+- **Date** : 30 septembre 2026
+- **Domaine** : `logiciel` (conditions d'un service d'API)
+- **Question** : « Peut-on garder les réponses de l'API Parallel et les resservir à d'autres clients ? »
+- **Ce qui s'est passé** : Parallel semblait un fournisseur de recherche de secours idéal pour 304. Un
+  résumé de moteur de recherche ne citait qu'une partie de la restriction ; la lecture directe des
+  conditions a montré deux clauses bloquantes pour le modèle même de 304.
+- **Source de la bonne réponse** : https://parallel.ai/customer-terms (sans date affichée), §2(b) :
+  « shall not be copied, cached, stored, or made available to other End Customers or other third
+  parties » ; §2(c) : pas de « databases, data brokerage, data selling/reselling businesses ».
+- **Réponse attendue de 304** : « Non : les conditions de Parallel (§2(b) et §2(c)) interdisent de
+  mettre les résultats en cache, de les partager avec d'autres clients et de construire une base de
+  données revendue. Seul un accord commercial spécifique lèverait ces restrictions. »
+
+## 14. GPTCache : le réordonnanceur par défaut se trompe une fois sur deux
+
+- **Date** : 30 septembre 2026
+- **Domaine** : `logiciel`
+- **Question** : « Le cache sémantique de GPTCache est-il fiable pour réutiliser des réponses ? »
+- **Ce qui s'est passé** : GPTCache est souvent cité comme la solution de cache sémantique. Sa dernière
+  version publiée sur PyPI est la 0.1.44 du 1er août 2024, alors que le dépôt a encore évolué en
+  septembre 2026. Son propre banc d'essai (PR #702, 22 septembre 2026, 1 536 cas) donne au
+  réordonnanceur fourni par défaut (`cross-encoder/quora-distilroberta-base`, seuil 0,80) 508
+  réutilisations fausses sur 880, soit 42,2 % de précision. L'évaluation plus fiable ajoutée
+  (« JEV ») appelle un service payant tiers (TypeSafe AI).
+- **Source de la bonne réponse** : https://github.com/zilliztech/GPTCache/pull/702 et
+  `gptcache/similarity_evaluation/jev.py`.
+- **Réponse attendue de 304** : « Pas tel quel : sur son propre banc d'essai, le réglage par défaut
+  réutilise à tort plus d'une fois sur deux. La version fiable (JEV) dépend d'une API payante d'un
+  tiers, et la dernière version publiée sur PyPI date d'août 2024. »

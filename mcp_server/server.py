@@ -101,8 +101,9 @@ def create_server(http: httpx.Client, api_key: str | None = None, *, remote: boo
         name="feedback",
         description=(
             "Dit si une réponse obtenue avec « ask » vous a servi. request_id : celui de la réponse. "
-            "useful : true ou false. issue (facultatif) : wrong, outdated, incomplete, bad_source ou other. "
-            "comment (facultatif) : ce qui manquait ou ce qui était faux."
+            "useful : true ou false. issue (facultatif) : wrong (fausse), outdated (périmée), incomplete, "
+            "bad_source (source insuffisante), off_topic (hors sujet), contradiction (une autre source dit "
+            "autre chose) ou other. comment (facultatif) : ce qui manquait ou ce qui était faux."
         ),
         annotations=ToolAnnotations(title="Donner un retour", read_only_hint=False, idempotent_hint=True),
     )
@@ -110,7 +111,7 @@ def create_server(http: httpx.Client, api_key: str | None = None, *, remote: boo
         request_id: str,
         useful: bool,
         ctx: Context,
-        issue: Literal["wrong", "outdated", "incomplete", "bad_source", "other"] | None = None,
+        issue: Literal[config.FEEDBACK_ISSUES] | None = None,
         comment: str | None = None,
     ) -> dict[str, Any]:
         body = {"request_id": request_id, "useful": useful, "issue": issue, "comment": comment}

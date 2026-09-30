@@ -83,7 +83,7 @@ def client_address(forwarded_for: str, peer: str | None) -> str:
 class FeedbackRequest(BaseModel):
     request_id: str = Field(min_length=1, max_length=64)
     useful: bool = Field(description="La réponse a-t-elle aidé l'agent à accomplir sa tâche ?")
-    issue: Literal["wrong", "outdated", "incomplete", "bad_source", "other"] | None = None
+    issue: Literal[config.FEEDBACK_ISSUES] | None = None
     comment: str | None = Field(default=None, max_length=1000)
 
 

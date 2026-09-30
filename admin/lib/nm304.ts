@@ -15,6 +15,8 @@ export const ISSUES: Record<string, string> = {
   outdated: 'périmée',
   incomplete: 'incomplète',
   bad_source: 'mauvaise source',
+  off_topic: 'hors sujet',
+  contradiction: 'contredite',
   other: 'autre',
 };
 
@@ -30,6 +32,18 @@ export interface Stats {
   cache_hit_rate: number;
   outcomes: Partial<Record<Outcome, number>>;
   avg_latency_ms: Partial<Record<Outcome, number>>;
+  latency_ms: { p50: number | null; p95: number | null };
+  economics: {
+    cost_per_answer_eur: number | null;
+    cost_per_useful_answer_eur: number | null;
+    avg_search_cost_eur: number | null;
+    unanswered_cost_eur: number;
+    refresh_searches: number;
+    refresh_cost_eur: number;
+    avoided_searches: number;
+    estimated_avoided_cost_eur: number | null;
+  };
+  clients_activity: { active: number; returning: number };
   estimated_revenue_eur: number;
   estimated_cost_eur: number;
   estimated_margin_eur: number;
@@ -44,6 +58,7 @@ export interface Stats {
     count: number;
     useful_rate: number;
     issues: Record<string, number>;
+    reuse_errors: number;
   };
 }
 

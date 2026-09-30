@@ -243,10 +243,13 @@ transaction utile en cas de litige ; sa forme n'est pas encore stable.
 
 Le moteur reste indépendant du paiement. Une couche fine devant `/v1/answer` :
 
-1. **Dès maintenant, sans paiement** : prendre en charge une clé d'idempotence sur `/v1/answer`
-   (en-tête `Idempotency-Key`, mêmes règles que `payment-identifier` : longueur 16 à 128, même
-   requête → même réponse sans nouveau décompte, requête différente → 409, clé liée au compte).
-   C'est utile tout de suite (quotas, crédits Stripe) et c'est le prérequis de x402.
+1. **Fait le 30/09/2026** (commit `be5b92e`, analyse Context7) : en-tête `Idempotency-Key` sur
+   `/v1/answer`. Même demande → même réponse sans nouveau décompte ; clé liée au compte (ou à
+   l'adresse IP sans clé) ; cause passagère non figée. Il suit la convention IETF (**422** si la clé a
+   servi pour une autre demande, **409** si la même demande est en cours). **Écart à régler au moment de
+   x402** : l'extension `payment-identifier` demande **409** pour une autre demande et une clé de
+   **16 à 128** caractères (ici : 200 au plus, sans minimum). Il suffira de traduire les codes dans la
+   couche de paiement, sans toucher au moteur.
 2. **Plus tard, en environnement de test identifié** (Base Sepolia, facilitateur CDP en test) : module
    `app/payment.py` avec le SDK officiel `x402[fastapi]`, activé par une variable d'environnement,
    **désactivé par défaut**. Flux `authorization` : vérifier → répondre depuis la mémoire ou chercher
@@ -279,30 +282,37 @@ dans la chaîne existante :
 
 ## 6. Ce qu'il faut mesurer
 
-| Mesure | Déjà disponible | À ajouter |
-|---|---|---|
-| Nombre de requêtes | oui | – |
-| Réponses utiles | retours `useful` | motifs `off_topic`, `contradiction` |
-| Taux d'abstention et causes | taux oui | **causes** (en cours dans l'autre session : `reason`) |
-| Réutilisation exacte | taux de cache, taux de répétition | – |
-| Réutilisation sémantique | – | seulement quand elle existera |
-| Erreurs de réutilisation détectées | – | retours `off_topic`/`wrong` sur des réponses servies depuis la mémoire |
-| Recherches externes évitées | = réponses servies depuis la mémoire | afficher aussi le coût évité (coût moyen d'une recherche × réponses depuis la mémoire, **estimation**) |
-| Latence | moyenne par résultat | **médiane et 95e centile** |
-| Coût par demande et par réponse utile | coût total | **coût par réponse** et **par réponse jugée utile** |
-| Coût de rafraîchissement | – | séparer les recherches qui remplacent une réponse expirée |
-| Retour des clients techniques | – | clés actives sur au moins deux jours différents |
-| Revenu et marge | estimés | réels quand un paiement existera |
+État au 30/09/2026 au soir : tout est disponible dans `GET /internal/stats` (tests :
+`tests/test_measures.py`), sauf ce qui dépend d'une fonction qui n'existe pas encore.
+
+| Mesure | Champ de `/internal/stats` |
+|---|---|
+| Nombre de requêtes | `requests` |
+| Réponses utiles | `feedback.useful_rate` ; motifs `feedback.issues`, dont **`off_topic`** et **`contradiction`** (nouveaux) |
+| Taux d'abstention et causes | `outcomes.unanswered`, `unanswered_reasons` (commit `be5b92e`) |
+| Réutilisation exacte | `cache_hit_rate`, `repeat_rate` |
+| Réutilisation sémantique | – (n'existe pas) |
+| Erreurs de réutilisation détectées | **`feedback.reuse_errors`** : retours « faux, périmé, hors sujet, contredit » sur des réponses servies depuis la mémoire |
+| Recherches externes évitées | **`economics.avoided_searches`** et **`economics.estimated_avoided_cost_eur`** (estimation : × coût moyen observé d'une recherche) |
+| Latence | `avg_latency_ms` ; **`latency_ms.p50`** et **`latency_ms.p95`** |
+| Coût par demande et par réponse utile | **`economics.cost_per_answer_eur`**, **`economics.cost_per_useful_answer_eur`** (vide sans retour « utile ») ; dépense perdue : **`economics.unanswered_cost_eur`** |
+| Coût de rafraîchissement | **`economics.refresh_searches`**, **`economics.refresh_cost_eur`** (recherche aboutie sur une question déjà résolue auparavant) |
+| Retour des clients techniques | **`clients_activity.active`** et **`.returning`** (clés actives au moins deux jours, hors accès sans clé partagé) |
+| Revenu et marge | estimés (`estimated_*`) ; réels quand un paiement existera |
+
+Les nouveaux chiffres sont renvoyés par l'API et typés dans le tableau de bord (`admin/lib/nm304.ts`),
+mais pas encore affichés.
 
 Un taux de cache élevé n'est un succès que si les retours ne signalent pas de réponses fausses ou
 périmées. Du trafic gratuit ne prouve pas une demande payante.
 
 ## 7. Classement
 
-**Utile immédiatement** (interne, sans dépendance, sans coût) :
-1. Idempotence sur `/v1/answer` (prérequis x402 et crédits).
-2. Motifs de retour `off_topic` et `contradiction`.
-3. Médiane et 95e centile de latence ; coût par réponse et par réponse utile ; clients qui reviennent.
+**Utile immédiatement** (interne, sans dépendance, sans coût) — **fait le 30/09/2026** :
+1. Idempotence sur `/v1/answer` (prérequis x402 et crédits) : commit `be5b92e`.
+2. Motifs de retour `off_topic` et `contradiction` : API, outil MCP, `llms.txt`, tableau de bord.
+3. Médiane et 95e centile de latence ; coût par réponse et par réponse utile ; coût évité, perdu et de
+   rafraîchissement ; clients qui reviennent ; erreurs de réutilisation (§6).
 
 **Utile après validation** :
 4. Couche x402 en réseau de test, désactivée par défaut (après avis comptable pour la production).
@@ -334,5 +344,10 @@ l'écart de licence (dépôt Apache-2.0, paquet Python déclaré MIT) et conserv
 (aucune clé Anthropic utilisée, `HANDOFF.md` §5), le taux de répétition, le coût par réponse et la
 qualité des sources restent inconnus, et aucune décision de cache sémantique ou de prix n'est
 fondée. Concrètement : fixer une limite de dépense, passer les 28 questions de
-`docs/QUESTIONS_TEST.md`, relire les réponses et les sources. En parallèle, sans dépense :
-idempotence, motifs de retour et mesures du §6. Ils seront prêts quand le trafic arrivera.
+`docs/QUESTIONS_TEST.md`, relire les réponses et les sources. L'idempotence, les motifs de retour et
+les mesures du §6 sont prêts : ces premières recherches donneront directement le coût par réponse,
+la latence réelle et les causes d'abstention.
+
+**Point à vérifier avant d'activer le moteur de secours OpenRouter** (commit `28aeec4`) : comme pour
+Parallel, lire les conditions d'OpenRouter et celles du fournisseur de recherche web que son plugin
+utilise, sur le droit de **garder et resservir** les résultats à d'autres clients. Pas encore vérifié.

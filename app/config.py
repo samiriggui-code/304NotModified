@@ -193,5 +193,11 @@ IDEMPOTENCY_TTL_SECONDS = int(os.environ.get("IDEMPOTENCY_TTL_SECONDS", str(24 *
 
 MAX_QUESTION_CHARS = 500
 
+# Motifs qu'un agent peut donner quand une réponse ne l'a pas aidé (API /v1/feedback et outil MCP).
+# off_topic : la réponse ne porte pas sur la question posée ; contradiction : l'agent dispose d'une
+# source qui dit autre chose. Un motif est un signal à examiner, jamais une preuve : il ne modifie
+# aucune réponse (idée de retour par résultat reprise de HiveMind, voir docs/ANALYSE_PARALLEL_GPTCACHE_HIVEMIND_X402.md).
+FEEDBACK_ISSUES = ("wrong", "outdated", "incomplete", "bad_source", "off_topic", "contradiction", "other")
+
 # Durée de conservation du journal des requêtes (questions, contextes, retours), en jours.
 LOG_RETENTION_DAYS = int(os.environ.get("LOG_RETENTION_DAYS", "365"))

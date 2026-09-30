@@ -75,8 +75,11 @@ claude mcp add --transport http 304notmodified {url}/mcp
 
 ## Dire si la réponse vous a servi
 POST {url}/v1/feedback (même clé, ou sans clé si la question a été posée sans clé)
-Corps JSON : {{"request_id": "...", "useful": true, "issue": "wrong | outdated | incomplete | bad_source | other",
+Corps JSON : {{"request_id": "...", "useful": true,
+"issue": "wrong | outdated | incomplete | bad_source | off_topic | contradiction | other",
 "comment": "facultatif : ce qui manquait ou ce qui était faux"}}
+issue : wrong = fausse, outdated = périmée, bad_source = source insuffisante, off_topic = hors sujet,
+contradiction = une autre source dit autre chose.
 Vos retours orientent le service ; ils ne modifient jamais directement une réponse.
 
 ## Domaines (champ « domain », facultatif)

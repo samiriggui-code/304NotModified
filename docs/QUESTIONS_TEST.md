@@ -39,3 +39,18 @@
 18. Quelles données transmettre en e-reporting, et à quelle fréquence ?
 19. Combien de temps et sous quelle forme archiver les factures électroniques ?
 20. Comment changer de plateforme agréée sans interrompre la réception des factures ?
+
+---
+
+# Questions de référence : formation professionnelle (domaine `formation`)
+
+21. Combien d'indicateurs compte le référentiel Qualiopi applicable aux audits réalisés en
+    décembre 2026 ? (piège connu : 33 depuis le décret n° 2026-728, beaucoup de pages disent 32 ;
+    voir `CAS_REELS.md`, cas n°6)
+22. À partir de quelle date les audits Qualiopi suivent-ils le nouveau référentiel ?
+23. Quel est le nouvel indicateur 33 et que demande-t-il ?
+24. Quelle est la dernière version publiée du guide de lecture Qualiopi, et à quelle date ?
+25. Un sous-traitant d'un organisme de formation doit-il être certifié Qualiopi ?
+26. Qualiopi suffit-il pour proposer une formation éligible au CPF ?
+27. Qu'est-ce qu'une non-conformité majeure, et quels indicateurs peuvent en entraîner une ?
+28. Combien de temps a-t-on pour appliquer une nouvelle version du guide de lecture ?

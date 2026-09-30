@@ -13,14 +13,32 @@ DOMAIN_TTL_SECONDS = {
     # Facturation électronique (réglementation, technique, intégration, process) : les règles, les
     # spécifications et la liste des plateformes agréées bougent souvent pendant le déploiement.
     "facturation": 86400,
+    # Formation professionnelle (Qualiopi, CPF, OPCO…) : nouveau référentiel au 1er novembre 2026.
+    "formation": 86400,
     "general": 86400,
 }
 DEFAULT_DOMAIN = "general"
 
 # Consignes de recherche propres à un domaine, ajoutées à la consigne générale du chercheur.
-# Premier domaine choisi : « facturation », la facturation électronique française sous tous ses
-# aspects : réglementation, technique, intégration et process (voir docs/VISION.md, §12).
+# Domaines prioritaires (voir docs/VISION.md, §12) : « facturation », la facturation électronique
+# française sous tous ses aspects (réglementation, technique, intégration, process), et
+# « formation », la formation professionnelle (Qualiopi, CPF, OPCO…).
 DOMAIN_GUIDANCE = {
+    "formation": (
+        "Questions sur la formation professionnelle en France : certification Qualiopi (référentiel\n"
+        "national qualité, guide de lecture, audits, indicateurs, preuves), CPF et EDOF, OPCO, France\n"
+        "Compétences (RNCP, Répertoire spécifique), sous-traitance, obligations des organismes de formation.\n"
+        "- Appuie-toi d'abord sur les sources officielles : Légifrance (Code du travail, décrets),\n"
+        "  travail-emploi.gouv.fr (référentiel et guide de lecture Qualiopi), France Compétences,\n"
+        "  Caisse des Dépôts et moncompteformation.gouv.fr (CPF, EDOF), COFRAC, Centre Inffo.\n"
+        "  Un site d'organisme certificateur, de consultant ou d'éditeur peut aider, mais ne suffit pas seul.\n"
+        "- Précise toujours la version du référentiel et du guide de lecture concernée, et sa date\n"
+        "  d'application. Le décret n° 2026-728 du 1er août 2026 fixe un nouveau référentiel (33 indicateurs)\n"
+        "  applicable aux audits à partir du 1er novembre 2026 : beaucoup de pages parlent encore de\n"
+        "  l'ancien (32 indicateurs). Vérifie aussi si un nouveau guide de lecture a été publié.\n"
+        "- Si les sources se contredisent, dis-le, indique laquelle fait foi et baisse la confiance.\n"
+        "- Reste sur de l'information générale : pas de conseil personnalisé sur un cas particulier."
+    ),
     "facturation": (
         "Questions sur la facturation électronique française, sous tous ses aspects :\n"
         "réglementation (qui est concerné, dates, obligations, mentions, sanctions), technique (formats\n"

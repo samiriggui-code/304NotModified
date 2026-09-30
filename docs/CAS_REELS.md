@@ -105,3 +105,24 @@
 - **Réponse attendue de 304** : la version applicable selon impots.gouv.fr, avec sa date, le
   lien vers les swaggers officiels, et le nombre de plateformes lu sur la liste officielle du jour,
   en signalant que des pages répandues citent des versions ou des chiffres dépassés.
+
+## 6. Qualiopi : nouveau référentiel à 33 indicateurs au 1er novembre 2026
+
+- **Date** : 30 septembre 2026
+- **Domaine** : `formation`
+- **Question** : « Combien d'indicateurs compte le référentiel Qualiopi, et lequel s'applique aux
+  prochains audits ? »
+- **Ce qui s'est passé** : la mémoire de Claude disait **32 indicateurs** (référentiel en vigueur
+  depuis 2022). En cherchant, des pages de 2026 disent encore 32, dont celle d'un organisme
+  certificateur (« Référentiel Qualiopi 2026 : 7 critères et 32 indicateurs »). Vérification sur
+  Légifrance : le **décret n° 2026-728 du 1er août 2026** (JO du 4 août 2026) fixe un nouveau
+  référentiel à **33 indicateurs**, en vigueur le **1er novembre 2026**. Le nouvel indicateur 33
+  demande « une démarche d'amélioration continue à partir de l'analyse des appréciations et des
+  réclamations, ainsi qu'une analyse des risques sur la qualité des formations délivrées ».
+  Autre contradiction : 43 000 ou 46 000 organismes certifiés selon les sources.
+- **Source de la bonne réponse** : https://www.legifrance.gouv.fr/jorf/id/JORFTEXT000054608509
+  (lu le 30 septembre 2026). Guide de lecture de la nouvelle version : pas encore publié début
+  septembre 2026 selon Certifopac ; à vérifier sur travail-emploi.gouv.fr.
+- **Réponse attendue de 304** : « 33 indicateurs pour les audits réalisés à partir du 1er novembre
+  2026 (décret n° 2026-728 du 1er août 2026) ; 32 avant cette date. » Avec la source Légifrance,
+  la date, et l'état de publication du guide de lecture.

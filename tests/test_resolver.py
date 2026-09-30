@@ -121,3 +121,11 @@ def test_einvoicing_guidance_covers_all_aspects():
     system = client.requests[0]["system"]
     for aspect in ("réglementation", "technique", "intégration", "process"):
         assert aspect in system
+
+
+def test_training_guidance_warns_about_new_qualiopi_framework():
+    client = FakeClient([message([NS(type="text", text=FINAL, citations=None)])])
+    ClaudeResolver(client).resolve("Combien d'indicateurs Qualiopi ?", "formation")
+
+    system = client.requests[0]["system"]
+    assert "2026-728" in system and "33 indicateurs" in system and "travail-emploi.gouv.fr" in system

@@ -295,6 +295,16 @@ Une seule intégration peut produire des centaines de milliers d'appels par mois
   par exemple) ; notre différence est la réponse finale, sur tous les aspects à la fois, à partir
   de documents officiels dispersés (PDF, Excel, zip sur impots.gouv, AFNOR, FNFE-MPE), avec la
   version et la date.
+- **Deuxième domaine, ajouté le 30 septembre 2026 : la formation professionnelle** (domaine
+  `formation`) : Qualiopi, CPF et EDOF, OPCO, RNCP et Répertoire spécifique.
+  Pourquoi : un nouveau référentiel Qualiopi (décret n° 2026-728 du 1er août 2026, 33 indicateurs
+  au lieu de 32) s'applique aux audits à partir du **1er novembre 2026**, et beaucoup de pages
+  décrivent encore l'ancien (cas n°6 de `CAS_REELS.md`). Environ 43 000 à 46 000 organismes
+  certifiés selon les sources, qui se posent tous les mêmes questions ; le guide de lecture de la
+  nouvelle version n'était pas encore publié début septembre 2026.
+  Clients visés : éditeurs de logiciels pour organismes de formation, consultants et cabinets qui
+  accompagnent la certification, organismes de formation et leurs agents.
+  Même limite : information générale sourcée, pas de conseil personnalisé.
 - Quel prix par requête, et une offre « réponse garantie » plus chère ?
 - Comment trouver les 10 premiers agents ou développeurs utilisateurs ?
 - À partir de quel volume passer de SQLite à une base plus robuste ?

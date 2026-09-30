@@ -114,7 +114,7 @@ Avec Claude Code : `claude mcp add 304notmodified -e NM304_URL=http://localhost:
 | Domaine | Fraîcheur par défaut |
 |---|---|
 | `prix`, `actualite` | 1 heure |
-| `logiciel`, `entreprise`, `facturation`, `general` | 24 heures |
+| `logiciel`, `entreprise`, `facturation`, `formation`, `general` | 24 heures |
 | `reglementation` | 7 jours |
 
 Ces durées se règlent dans `app/config.py`.
@@ -126,6 +126,10 @@ e-reporting, archivage). Le chercheur s'appuie d'abord sur les sources officiell
 BOFiP, Légifrance, AIFE, AFNOR, FNFE-MPE, EN 16931, OpenPeppol), donne toujours les dates et
 versions, signale les contradictions et reste sur de l'information générale
 (`DOMAIN_GUIDANCE` dans `app/config.py`).
+
+**Deuxième domaine : `formation`**, la formation professionnelle : Qualiopi (nouveau référentiel
+au 1er novembre 2026), CPF et EDOF, OPCO, RNCP et Répertoire spécifique, avec les mêmes règles.
+
 Des questions de référence pour tester le service : [`docs/QUESTIONS_TEST.md`](docs/QUESTIONS_TEST.md).
 
 ## Vérifier avant chaque commit

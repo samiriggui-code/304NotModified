@@ -35,6 +35,8 @@ LLMS_TXT = f"""# 304NotModified (version d'essai)
 > réglementation (qui, quand, obligations), technique (Factur-X, UBL, CII, normes AFNOR XP Z12-012/013/014),
 > intégration (API des plateformes agréées, annuaire, Peppol) et process (statuts de cycle de vie,
 > rejets, avoirs, e-reporting, archivage). Toujours avec la version et la date des sources officielles.
+> Deuxième spécialité : la formation professionnelle (domaine « formation ») : Qualiopi (référentiel
+> national qualité, guide de lecture, audits), CPF et EDOF, OPCO, RNCP et Répertoire spécifique.
 > Information générale : pas de conseil juridique ou fiscal personnalisé.
 
 ## Utilisation

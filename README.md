@@ -72,10 +72,14 @@ On y voit en un coup d'œil : les chiffres clés (requêtes, taux de répétitio
 revenu, coût et marge estimés), d'où viennent les réponses (cache, recherche, sans réponse), les
 questions les plus répétées et celles restées sans réponse, les dernières requêtes, les réponses
 en mémoire avec leurs sources, et les clés d'API (avec création d'une nouvelle clé).
-La page se rafraîchit toute seule toutes les 30 secondes. Le texte venant du web y est toujours
+Des graphiques montrent l'évolution sur la période choisie (24 h, 7, 30 ou 90 jours, tout) :
+volume de requêtes par heure ou par jour (cache, recherche, sans réponse), taux de cache, coût
+des recherches, domaines et agents les plus actifs. Valeurs au survol ou au toucher, et bouton
+« Tableau » pour lire les chiffres exacts. La page se rafraîchit toute seule toutes les 30 secondes. Le texte venant du web y est toujours
 affiché comme du texte brut, jamais interprété.
 
-Les mêmes données en JSON : `/admin/stats`, `/admin/requests`, `/admin/answers`, `/admin/keys`.
+Les mêmes données en JSON : `/admin/stats?days=N`, `/admin/timeseries?days=N&bucket=hour|day`,
+`/admin/requests`, `/admin/answers`, `/admin/feedback`, `/admin/keys`.
 
 Lire les statistiques : volume, taux de répétition, taux de cache, coût, revenu et marge estimés,
 questions sans réponse.

@@ -267,6 +267,20 @@ class Store:
             ).fetchall()
         return [{**dict(r), "useful": bool(r["useful"])} for r in rows]
 
+    def timeseries(self, *, since: float, bucket_seconds: int, tz_offset_seconds: int = 0) -> list[dict]:
+        """Requêtes par tranche de temps (heure ou jour, alignée sur le fuseau du lecteur)."""
+        with self._lock:
+            rows = self._db.execute(
+                """SELECT CAST((ts + :tz) / :b AS INTEGER) * :b - :tz AS t,
+                          SUM(outcome = 'hit') AS hit, SUM(outcome = 'miss') AS miss,
+                          SUM(outcome = 'unanswered') AS unanswered,
+                          COALESCE(SUM(cost_eur), 0) AS cost_eur,
+                          CAST(AVG(latency_ms) AS INTEGER) AS avg_latency_ms
+                   FROM requests WHERE ts >= :since GROUP BY 1 ORDER BY 1""",
+                {"tz": tz_offset_seconds, "b": bucket_seconds, "since": since},
+            ).fetchall()
+        return [dict(r) for r in rows]
+
     def purge_older_than(self, days: int) -> None:
         """Efface le journal des requêtes (et leurs retours) plus ancien que `days` jours."""
         cutoff = time.time() - days * 86400
@@ -277,29 +291,44 @@ class Store:
             self._db.execute("DELETE FROM requests WHERE ts < ?", (cutoff,))
             self._db.commit()
 
-    def stats(self, price_per_request_eur: float) -> dict:
+    def stats(self, price_per_request_eur: float, since: float = 0.0) -> dict:
+        """Statistiques sur les requêtes depuis `since` (horodatage Unix ; 0 = depuis le début)."""
         with self._lock:
-            q = self._db.execute
-            total = q("SELECT COUNT(*) FROM requests").fetchone()[0]
-            distinct = q("SELECT COUNT(DISTINCT key) FROM requests").fetchone()[0]
-            by_outcome = dict(q("SELECT outcome, COUNT(*) FROM requests GROUP BY outcome").fetchall())
-            cost = q("SELECT COALESCE(SUM(cost_eur), 0) FROM requests").fetchone()[0]
+
+            def q(sql):
+                # Chaque « ? » de ces requêtes est la borne de début de période.
+                return self._db.execute(sql, (since,) * sql.count("?"))
+
+            total = q("SELECT COUNT(*) FROM (SELECT * FROM requests WHERE ts >= ?) AS requests").fetchone()[0]
+            distinct = q(
+                "SELECT COUNT(DISTINCT key) FROM (SELECT * FROM requests WHERE ts >= ?) AS requests"
+            ).fetchone()[0]
+            by_outcome = dict(
+                q(
+                    "SELECT outcome, COUNT(*) FROM (SELECT * FROM requests WHERE ts >= ?) AS requests GROUP BY outcome"
+                ).fetchall()
+            )
+            cost = q(
+                "SELECT COALESCE(SUM(cost_eur), 0) FROM (SELECT * FROM requests WHERE ts >= ?) AS requests"
+            ).fetchone()[0]
             avg_latency = dict(
-                q("SELECT outcome, CAST(AVG(latency_ms) AS INTEGER) FROM requests GROUP BY outcome").fetchall()
+                q(
+                    "SELECT outcome, CAST(AVG(latency_ms) AS INTEGER) FROM (SELECT * FROM requests WHERE ts >= ?) AS requests GROUP BY outcome"
+                ).fetchall()
             )
             domains = [
                 dict(r)
                 for r in q(
                     """SELECT COALESCE(domain, 'inconnu') AS domain, COUNT(*) AS requests,
                               SUM(outcome = 'hit') AS hits
-                       FROM requests GROUP BY 1 ORDER BY 2 DESC"""
+                       FROM (SELECT * FROM requests WHERE ts >= ?) AS requests GROUP BY 1 ORDER BY 2 DESC"""
                 ).fetchall()
             ]
             top = [
                 dict(r)
                 for r in q(
                     """SELECT key, MIN(question) AS question, COUNT(*) AS requests
-                       FROM requests GROUP BY key HAVING COUNT(*) > 1
+                       FROM (SELECT * FROM requests WHERE ts >= ?) AS requests GROUP BY key HAVING COUNT(*) > 1
                        ORDER BY 3 DESC LIMIT 20"""
                 ).fetchall()
             ]
@@ -307,22 +336,30 @@ class Store:
                 dict(r)
                 for r in q(
                     """SELECT MIN(question) AS question, COUNT(*) AS requests
-                       FROM requests WHERE outcome = 'unanswered'
+                       FROM (SELECT * FROM requests WHERE ts >= ?) AS requests WHERE outcome = 'unanswered'
                        GROUP BY key ORDER BY 2 DESC LIMIT 20"""
                 ).fetchall()
             ]
 
-            channels = dict(q("SELECT COALESCE(channel, 'http'), COUNT(*) FROM requests GROUP BY 1").fetchall())
+            channels = dict(
+                q(
+                    "SELECT COALESCE(channel, 'http'), COUNT(*) FROM (SELECT * FROM requests WHERE ts >= ?) AS requests GROUP BY 1"
+                ).fetchall()
+            )
             clients = [
                 dict(r)
                 for r in q(
                     """SELECT COALESCE(client, 'inconnu') AS client, COUNT(*) AS requests
-                       FROM requests GROUP BY 1 ORDER BY 2 DESC LIMIT 20"""
+                       FROM (SELECT * FROM requests WHERE ts >= ?) AS requests GROUP BY 1 ORDER BY 2 DESC LIMIT 20"""
                 ).fetchall()
             ]
-            fb = q("SELECT COUNT(*) AS n, COALESCE(SUM(useful), 0) AS useful FROM feedback").fetchone()
+            fb = q(
+                "SELECT COUNT(*) AS n, COALESCE(SUM(useful), 0) AS useful FROM (SELECT * FROM feedback WHERE ts >= ?) AS feedback"
+            ).fetchone()
             fb_issues = dict(
-                q("SELECT issue, COUNT(*) FROM feedback WHERE issue IS NOT NULL GROUP BY issue").fetchall()
+                q(
+                    "SELECT issue, COUNT(*) FROM (SELECT * FROM feedback WHERE ts >= ?) AS feedback WHERE issue IS NOT NULL GROUP BY issue"
+                ).fetchall()
             )
 
         answered = by_outcome.get("hit", 0) + by_outcome.get("miss", 0)

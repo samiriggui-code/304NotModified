@@ -199,3 +199,22 @@ def test_old_requests_are_purged(tmp_path):
     store.log(api_key="k", key="q", question="récente", domain=None, outcome="hit", latency_ms=1)
     store.purge_older_than(365)
     assert [r["question"] for r in store.recent_requests(10)] == ["récente"]
+
+
+def test_timeseries_and_period_filter(setup):
+    client, _, headers = setup
+    for q in ("Même question", "Même question", "question inconnu"):
+        client.post("/v1/answer", json={"question": q}, headers=headers)
+    store = client.app.state.store
+    store._db.execute("UPDATE requests SET ts = ts - 3 * 86400 WHERE outcome = 'unanswered'")
+    store._db.commit()
+
+    week = client.get("/admin/timeseries?days=7&bucket=day", headers=ADMIN).json()
+    assert sum(b["hit"] + b["miss"] + b["unanswered"] for b in week) == 3
+    assert len(week) == 2  # deux jours différents
+    today = client.get("/admin/timeseries?days=1&bucket=hour", headers=ADMIN).json()
+    assert sum(b["hit"] + b["miss"] for b in today) == 2 and all(b["unanswered"] == 0 for b in today)
+
+    assert client.get("/admin/stats?days=1", headers=ADMIN).json()["requests"] == 2
+    assert client.get("/admin/stats", headers=ADMIN).json()["requests"] == 3
+    assert client.get("/admin/timeseries").status_code == 403

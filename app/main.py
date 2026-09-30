@@ -92,6 +92,7 @@ def create_app(store: Store | None = None, resolver: Resolver | None = None) -> 
         resolver = ClaudeResolver() if os.environ.get("ANTHROPIC_API_KEY") else NullResolver()
 
     app = FastAPI(title="304NotModified", version="0.1.0")
+    app.state.store = store
 
     def require_key(x_api_key: str = Header(default="")):
         row = store.get_key(x_api_key) if x_api_key else None
@@ -190,8 +191,21 @@ def create_app(store: Store | None = None, resolver: Resolver | None = None) -> 
         return {"api_key": store.create_key(body.label, body.quota), "quota": body.quota}
 
     @app.get("/admin/stats", dependencies=[Depends(require_admin)])
-    def stats():
-        return store.stats(config.PRICE_PER_REQUEST_EUR)
+    def stats(days: float | None = Query(default=None, gt=0, le=3650)):
+        since = time.time() - days * 86400 if days else 0.0
+        return store.stats(config.PRICE_PER_REQUEST_EUR, since=since)
+
+    @app.get("/admin/timeseries", dependencies=[Depends(require_admin)])
+    def timeseries(
+        days: float = Query(default=7, gt=0, le=3650),
+        bucket: Literal["hour", "day"] = "day",
+        tz_offset_min: int = Query(default=0, ge=-14 * 60, le=14 * 60),
+    ):
+        return store.timeseries(
+            since=time.time() - days * 86400,
+            bucket_seconds=3600 if bucket == "hour" else 86400,
+            tz_offset_seconds=tz_offset_min * 60,
+        )
 
     @app.get("/admin/keys", dependencies=[Depends(require_admin)])
     def list_keys():

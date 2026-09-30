@@ -7,12 +7,17 @@
 <style>
   :root {
     --bg: #f6f7f9; --card: #ffffff; --text: #1b1f24; --muted: #5f6b7a; --line: #e3e7ec;
-    --accent: #2f6fdb; --hit: #1f9d6b; --miss: #2f6fdb; --none: #d9822b; --bad: #c9372c;
+    --accent: #2f6fdb; --bad: #c9372c;
+    /* Séries des graphiques (palette validée daltonisme, fond clair) et statuts. */
+    --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --good: #0ca30c; --critical: #d03b3b;
+    --grid: #e1e0d9; --axis: #c3c2b7;
   }
   @media (prefers-color-scheme: dark) {
     :root {
       --bg: #111418; --card: #1a1f25; --text: #e8ecf1; --muted: #9aa6b4; --line: #2a313a;
-      --accent: #6ea2ff; --hit: #3cc58e; --miss: #6ea2ff; --none: #f0a35a; --bad: #ff6b5e;
+      --accent: #6ea2ff; --bad: #ff6b5e;
+      --s1: #3987e5; --s2: #d95926; --s3: #199e70; --good: #0ca30c; --critical: #d03b3b;
+      --grid: #2c2c2a; --axis: #383835;
     }
   }
   * { box-sizing: border-box; }
@@ -32,7 +37,7 @@
   .tile b { display: block; font-size: 24px; font-variant-numeric: tabular-nums; }
   .tile.key { border-color: var(--accent); }
   .grid2 { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
-  .bar { display: flex; height: 12px; border-radius: 6px; overflow: hidden; background: var(--line); margin: 8px 0; }
+  .bar { display: flex; gap: 2px; height: 12px; border-radius: 4px; overflow: hidden; margin: 8px 0; }
   .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; }
   .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; }
   .scroll { overflow-x: auto; }
@@ -40,8 +45,37 @@
   th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
   th { color: var(--muted); font-weight: 500; font-size: 13px; white-space: nowrap; }
   td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; white-space: nowrap;
-          color: #fff; }
+  .tag { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; white-space: nowrap; }
+  .tag i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; flex: none; }
+  /* Filtres et graphiques */
+  .filters { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .filters button { background: var(--card); color: var(--text); border: 1px solid var(--line); padding: 6px 12px; }
+  .filters button[aria-pressed="true"] { border-color: var(--accent); font-weight: 600; }
+  .chart-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .chart-head button { background: transparent; color: var(--muted); border: 1px solid var(--line); padding: 3px 10px;
+                       font-size: 13px; }
+  .chart { position: relative; margin-top: 6px; }
+  .chart svg { display: block; width: 100%; overflow: visible; }
+  .chart text { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .chart .gridline { stroke: var(--grid); stroke-width: 1; }
+  .chart .baseline { stroke: var(--axis); stroke-width: 1; }
+  .chart .hit { fill: transparent; cursor: crosshair; outline: none; }
+  .chart .hit:focus-visible { fill: var(--grid); fill-opacity: .5; }
+  .chart .col.dim { opacity: .45; }
+  .loading .chart, .loading .tiles { opacity: .6; transition: opacity .2s; }
+  .hbar { display: grid; grid-template-columns: minmax(80px, 38%) 1fr; gap: 6px 10px; align-items: center; font-size: 13px; }
+  .hbar .label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hbar .track { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .hbar .fill { height: 14px; border-radius: 0 4px 4px 0; background: var(--s1); min-width: 2px; }
+  .hbar .val { color: var(--text); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .hbar .muted { white-space: nowrap; }
+  #tip { position: fixed; z-index: 10; pointer-events: none; background: var(--card); color: var(--text);
+         border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 13px;
+         box-shadow: 0 4px 16px rgba(0,0,0,.12); min-width: 150px; }
+  #tip .row { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
+  #tip .row span:first-child { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
+  #tip b { font-variant-numeric: tabular-nums; }
+  #tip .key { display: inline-block; width: 12px; height: 2px; border-radius: 1px; }
   .answer { border-top: 1px solid var(--line); padding: 12px 0; }
   .answer:first-of-type { border-top: 0; padding-top: 0; }
   .answer p { margin: 4px 0; white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -80,7 +114,35 @@
   </section>
 
   <div id="app" hidden style="display:grid; gap:16px">
+    <div class="filters" role="group" aria-label="Période">
+      <span class="muted">Période :</span>
+      <button data-days="1">24 h</button>
+      <button data-days="7">7 jours</button>
+      <button data-days="30">30 jours</button>
+      <button data-days="90">90 jours</button>
+      <button data-days="3650">Tout</button>
+    </div>
+
     <section class="tiles" id="tiles"></section>
+
+    <section class="card">
+      <div class="chart-head"><h2>Volume de requêtes</h2><button data-table="volume">Tableau</button></div>
+      <div class="legend" id="volume-legend"></div>
+      <div class="chart" id="volume"></div>
+    </section>
+
+    <div class="grid2">
+      <section class="card">
+        <div class="chart-head"><h2>Taux de cache</h2><button data-table="cacherate">Tableau</button></div>
+        <p class="muted" style="margin:0">Part des réponses servies depuis la mémoire : plus il monte, plus la marge grossit.</p>
+        <div class="chart" id="cacherate"></div>
+      </section>
+      <section class="card">
+        <div class="chart-head"><h2>Coût des recherches</h2><button data-table="cost">Tableau</button></div>
+        <p class="muted" style="margin:0">Estimation, en euros, des nouvelles recherches sur le web.</p>
+        <div class="chart" id="cost"></div>
+      </section>
+    </div>
 
     <section class="card">
       <h2>D'où viennent les réponses</h2>
@@ -99,7 +161,7 @@
     </div>
 
     <div class="grid2">
-      <section class="card"><h2>Domaines</h2><div class="scroll" id="domains"></div></section>
+      <section class="card"><h2>Domaines les plus demandés</h2><div id="domains"></div></section>
       <section class="card"><h2>Temps de réponse moyen</h2><div class="scroll" id="latency"></div></section>
     </div>
 
@@ -110,7 +172,7 @@
     </section>
 
     <div class="grid2">
-      <section class="card"><h2>Agents</h2><div class="scroll" id="clients"></div></section>
+      <section class="card"><h2>Agents les plus actifs</h2><div id="clients"></div></section>
       <section class="card">
         <h2>Retours des agents</h2>
         <p class="muted" style="margin-top:-4px">Notés à part : un retour ne modifie jamais une réponse.</p>
@@ -139,13 +201,14 @@
     <div><button class="ghost" id="logout">Se déconnecter</button></div>
   </div>
 </main>
+<div id="tip" role="status" hidden></div>
 
 <script>
 "use strict";
 const OUTCOMES = {
-  hit: ["Cache", "var(--hit)"],
-  miss: ["Recherche", "var(--miss)"],
-  unanswered: ["Sans réponse", "var(--none)"],
+  hit: ["Cache", "var(--s1)"],
+  miss: ["Recherche", "var(--s2)"],
+  unanswered: ["Sans réponse", "var(--s3)"],
 };
 const $ = (id) => document.getElementById(id);
 let token = "";
@@ -168,9 +231,12 @@ const pct = (x) => (x * 100).toFixed(1).replace(".", ",") + " %";
 const eur = (x) => x.toLocaleString("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 4 });
 const date = (ts) => new Date(ts * 1000).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
 const safeUrl = (u) => (typeof u === "string" && /^https?:\/\//i.test(u) ? u : null);
+// L'identité vient de la pastille de couleur ; le texte reste à l'encre normale.
+const tag = (label, color, icon = "") =>
+  el("span", { class: "tag" }, el("i", { style: `background:${color}` }), (icon ? icon + " " : "") + label);
 const pill = (outcome) => {
   const [label, color] = OUTCOMES[outcome] || [outcome, "var(--muted)"];
-  return el("span", { class: "pill", style: `background:${color}` }, label);
+  return tag(label, color);
 };
 
 function table(headers, rows, numeric = []) {
@@ -213,8 +279,9 @@ function renderStats(s) {
 
   $("top").replaceChildren(table(["Question", "Fois"], s.top_repeated_questions.map((q) => [q.question, q.requests]), [1]));
   $("unanswered").replaceChildren(table(["Question", "Fois"], s.top_unanswered_questions.map((q) => [q.question, q.requests]), [1]));
-  $("domains").replaceChildren(table(["Domaine", "Requêtes", "Cache"],
-    s.domains.map((d) => [d.domain, d.requests, d.hits || 0]), [1, 2]));
+  $("domains").replaceChildren(hbars(s.domains.map((d) => ({
+    label: d.domain, value: d.requests, note: d.requests ? `${Math.round(((d.hits || 0) / d.requests) * 100)} % cache` : "",
+  }))));
   $("latency").replaceChildren(table(["Origine", "Moyenne"],
     Object.entries(s.avg_latency_ms).map(([o, ms]) => [pill(o), `${ms.toLocaleString("fr-FR")} ms`]), [1]));
 }
@@ -223,7 +290,7 @@ const ISSUES = { wrong: "fausse", outdated: "périmée", incomplete: "incomplèt
 function feedbackPill(useful, issue) {
   if (useful === null || useful === undefined) return "";
   const label = useful ? "utile" : "pas utile" + (issue ? " · " + (ISSUES[issue] || issue) : "");
-  return el("span", { class: "pill", style: `background:${useful ? "var(--hit)" : "var(--bad)"}` }, label);
+  return tag(label, useful ? "var(--good)" : "var(--critical)", useful ? "✓" : "✕");
 }
 
 function renderRequests(rows) {
@@ -251,7 +318,7 @@ function renderClients(s) {
   $("clients").replaceChildren(
     el("p", { class: "muted", style: "margin:0 0 8px" },
       Object.entries(s.channels).map(([c, n]) => `${c === "mcp" ? "Par MCP" : "Par l'API"} : ${n}`).join(" · ") || "—"),
-    table(["Agent", "Requêtes"], s.clients.map((c) => [c.client, c.requests]), [1]));
+    hbars(s.clients.map((c) => ({ label: c.client, value: c.requests }))));
 }
 
 function renderFeedback(rows) {
@@ -282,17 +349,261 @@ function renderKeys(rows) {
     rows.map((k) => [k.label, k.key, k.used, k.quota, date(k.created_at)]), [2, 3]));
 }
 
+// ---------------------------------------------------------------------------
+// Graphiques (SVG dessiné à la main, sans bibliothèque externe).
+// Règles : marques fines, arrondi 4 px côté donnée, grille discrète, valeurs au survol,
+// et un tableau pour lire chaque graphique sans couleur ni survol.
+// ---------------------------------------------------------------------------
+const SVGNS = "http://www.w3.org/2000/svg";
+function svgEl(tag, attrs) {
+  const node = document.createElementNS(SVGNS, tag);
+  for (const [k, v] of Object.entries(attrs || {})) node.setAttribute(k, String(v));
+  return node;
+}
+// Pas de graduation « rond » (1, 2, 5 × 10ⁿ) pour 3 à 5 lignes ; entier si `integer`.
+function niceScale(max, integer) {
+  if (max <= 0) return { yMax: integer ? 4 : 1, step: integer ? 1 : 0.25 };
+  const raw = max / 4;
+  const p = Math.pow(10, Math.floor(Math.log10(raw)));
+  let step = [1, 2, 5, 10].map((m) => m * p).find((v) => v >= raw);
+  if (integer) step = Math.max(1, Math.round(step));
+  return { yMax: Math.ceil(max / step - 1e-9) * step, step };
+}
+// Colonne arrondie en haut (côté donnée), carrée sur la ligne de base.
+function colPath(x, y, w, h, r) {
+  if (h <= 0) return "";
+  r = Math.min(r, w / 2, h);
+  return `M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h}Z`;
+}
+const tip = () => $("tip");
+function showTip(ev, title, rows) {
+  const t = tip();
+  t.replaceChildren(el("div", { class: "muted", style: "margin-bottom:4px" }, title),
+    ...rows.map(([label, value, color]) => el("div", { class: "row" },
+      el("span", {}, color ? el("i", { class: "key", style: `background:${color}` }) : null, label), el("b", {}, value))));
+  t.hidden = false;
+  const r = ev.currentTarget && ev.clientX === undefined ? ev.currentTarget.getBoundingClientRect() : null;
+  const x = r ? r.left + r.width / 2 : ev.clientX, y = r ? r.top : ev.clientY;
+  const w = t.offsetWidth, h = t.offsetHeight;
+  t.style.left = Math.max(8, Math.min(window.innerWidth - w - 8, x + 12)) + "px";
+  t.style.top = Math.max(8, y - h - 12) + "px";
+}
+const hideTip = () => { tip().hidden = true; };
+
+let period = 7;
+try { period = Number(localStorage.getItem("nm304_period")) || 7; } catch (e) {}
+const bucketKind = () => (period <= 1 ? "hour" : "day");
+function bucketLabel(t, long) {
+  const d = new Date(t * 1000);
+  if (bucketKind() === "hour") return long ? d.toLocaleString("fr-FR", { weekday: "short", hour: "2-digit", minute: "2-digit" })
+    : String(d.getHours()).padStart(2, "0") + " h";
+  return d.toLocaleDateString("fr-FR", long ? { weekday: "short", day: "numeric", month: "short" } : { day: "numeric", month: "short" });
+}
+// Complète les tranches vides pour que l'axe du temps soit continu.
+function fillBuckets(rows) {
+  const b = bucketKind() === "hour" ? 3600 : 86400;
+  const tz = -new Date().getTimezoneOffset() * 60;
+  const now = Date.now() / 1000;
+  const first = rows.length ? rows[0].t : now;
+  const start = Math.floor((Math.max(now - period * 86400, bucketKind() === "day" && period > 90 ? first : 0) + tz) / b) * b - tz;
+  const byT = new Map(rows.map((r) => [r.t, r]));
+  const out = [];
+  for (let t = start; t <= now; t += b) out.push(byT.get(t) || { t, hit: 0, miss: 0, unanswered: 0, cost_eur: 0, avg_latency_ms: null });
+  return out;
+}
+
+function frame(container, { yMax, step, yFmt, n, height = 200 }) {
+  const width = Math.max(260, container.clientWidth);
+  const m = { l: 44, r: 10, t: 10, b: 26 };
+  const W = width - m.l - m.r, H = height - m.t - m.b;
+  const svg = svgEl("svg", { viewBox: `0 0 ${width} ${height}`, height, role: "img" });
+  const ticks = Math.round(yMax / step);
+  for (let i = 0; i <= ticks; i++) {
+    const v = step * i, y = m.t + H - (H * v) / yMax;
+    svg.append(svgEl("line", { class: i ? "gridline" : "baseline", x1: m.l, x2: m.l + W, y1: y, y2: y }));
+    const label = svgEl("text", { x: m.l - 6, y: y + 4, "text-anchor": "end" });
+    label.textContent = yFmt(v);
+    svg.append(label);
+  }
+  const band = W / Math.max(1, n);
+  return { svg, m, W, H, band, x: (i) => m.l + band * i + band / 2, y: (v) => m.t + H - (H * v) / yMax };
+}
+function xLabels(f, buckets) {
+  const every = Math.max(1, Math.ceil(buckets.length / Math.max(2, Math.floor(f.W / 70))));
+  buckets.forEach((b, i) => {
+    if (i % every) return;
+    const t = svgEl("text", { x: f.x(i), y: f.m.t + f.H + 17, "text-anchor": "middle" });
+    t.textContent = bucketLabel(b.t, false);
+    f.svg.append(t);
+  });
+}
+function hitArea(f, i, onShow) {
+  const r = svgEl("rect", { class: "hit", x: f.m.l + f.band * i, y: f.m.t, width: f.band, height: f.H, tabindex: 0 });
+  r.addEventListener("pointermove", onShow);
+  r.addEventListener("focus", onShow);
+  r.addEventListener("pointerleave", hideTip);
+  r.addEventListener("blur", hideTip);
+  return r;
+}
+const EMPTY = () => el("p", { class: "muted" }, "Pas encore de données sur cette période.");
+
+function stackedColumns(container, buckets) {
+  const keys = Object.keys(OUTCOMES);
+  const totals = buckets.map((b) => keys.reduce((a, k) => a + (b[k] || 0), 0));
+  if (!totals.some(Boolean)) { container.replaceChildren(EMPTY()); return; }
+  const f = frame(container, { ...niceScale(Math.max(...totals), true), yFmt: (v) => v.toLocaleString("fr-FR"), n: buckets.length });
+  const w = Math.max(2, Math.min(24, f.band * 0.62));
+  buckets.forEach((b, i) => {
+    const g = svgEl("g", { class: "col" });
+    let acc = 0;
+    const present = keys.filter((k) => b[k]);
+    present.forEach((k, j) => {
+      const y0 = f.y(acc), y1 = f.y(acc + b[k]);
+      acc += b[k];
+      const gap = j ? 2 : 0; // 2 px de fond entre deux segments
+      const top = j === present.length - 1;
+      g.append(svgEl("path", { fill: OUTCOMES[k][1],
+        d: top ? colPath(f.x(i) - w / 2, y1, w, Math.max(0, y0 - y1 - gap), 4)
+               : `M${f.x(i) - w / 2},${y1}h${w}v${Math.max(0, y0 - y1 - gap)}h${-w}Z` }));
+    });
+    f.svg.append(g);
+    f.svg.append(hitArea(f, i, (ev) => {
+      f.svg.querySelectorAll(".col").forEach((c, k) => c.classList.toggle("dim", k !== i));
+      showTip(ev, bucketLabel(b.t, true), [
+        ...keys.map((k) => [OUTCOMES[k][0], (b[k] || 0).toLocaleString("fr-FR"), OUTCOMES[k][1]]),
+        ["Total", totals[i].toLocaleString("fr-FR")],
+      ]);
+    }));
+  });
+  f.svg.addEventListener("pointerleave", () => f.svg.querySelectorAll(".col").forEach((c) => c.classList.remove("dim")));
+  xLabels(f, buckets);
+  f.svg.setAttribute("aria-label", "Volume de requêtes par période");
+  container.replaceChildren(f.svg);
+}
+
+function singleColumns(container, buckets, value, fmt, color, label) {
+  const vals = buckets.map(value);
+  if (!vals.some(Boolean)) { container.replaceChildren(EMPTY()); return; }
+  const f = frame(container, { ...niceScale(Math.max(...vals), false), yFmt: fmt, n: buckets.length, height: 170 });
+  const w = Math.max(2, Math.min(24, f.band * 0.62));
+  buckets.forEach((b, i) => {
+    const g = svgEl("g", { class: "col" });
+    g.append(svgEl("path", { fill: color, d: colPath(f.x(i) - w / 2, f.y(vals[i]), w, f.y(0) - f.y(vals[i]), 4) }));
+    f.svg.append(g);
+    f.svg.append(hitArea(f, i, (ev) => showTip(ev, bucketLabel(b.t, true), [[label, fmt(vals[i]), color]])));
+  });
+  xLabels(f, buckets);
+  f.svg.setAttribute("aria-label", label);
+  container.replaceChildren(f.svg);
+}
+
+function lineChart(container, buckets, value, fmt, color, label) {
+  const vals = buckets.map(value);
+  if (!vals.some((v) => v !== null)) { container.replaceChildren(EMPTY()); return; }
+  const f = frame(container, { yMax: 1, step: 0.25, yFmt: fmt, n: buckets.length, height: 170 });
+  let d = "", area = "", last = null, open = false, segStart = null;
+  vals.forEach((v, i) => {
+    if (v === null) {
+      if (open) area += `L${f.x(last)},${f.y(0)}L${f.x(segStart)},${f.y(0)}Z`;
+      open = false; return;
+    }
+    if (!open) { segStart = i; d += `M${f.x(i)},${f.y(v)}`; area += `M${f.x(i)},${f.y(v)}`; }
+    else { d += `L${f.x(i)},${f.y(v)}`; area += `L${f.x(i)},${f.y(v)}`; }
+    open = true; last = i;
+  });
+  if (open) area += `L${f.x(last)},${f.y(0)}L${f.x(segStart)},${f.y(0)}Z`;
+  f.svg.append(svgEl("path", { d: area, fill: color, "fill-opacity": 0.1 }));
+  f.svg.append(svgEl("path", { d, fill: "none", stroke: color, "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round" }));
+  // Point et valeur au dernier relevé (étiquette directe, une seule).
+  f.svg.append(svgEl("circle", { cx: f.x(last), cy: f.y(vals[last]), r: 4, fill: color, stroke: "var(--card)", "stroke-width": 2 }));
+  const endLabel = svgEl("text", { x: f.x(last) - 6, y: f.y(vals[last]) - 9, "text-anchor": "end", style: "fill:var(--text);font-size:12px;font-weight:600" });
+  endLabel.textContent = fmt(vals[last]);
+  f.svg.append(endLabel);
+  const cross = svgEl("line", { class: "gridline", y1: f.m.t, y2: f.m.t + f.H, style: "stroke:var(--axis)", visibility: "hidden" });
+  const dot = svgEl("circle", { r: 4, fill: color, stroke: "var(--card)", "stroke-width": 2, visibility: "hidden" });
+  f.svg.append(cross, dot);
+  buckets.forEach((b, i) => f.svg.append(hitArea(f, i, (ev) => {
+    cross.setAttribute("x1", f.x(i)); cross.setAttribute("x2", f.x(i)); cross.setAttribute("visibility", "visible");
+    if (vals[i] !== null) { dot.setAttribute("cx", f.x(i)); dot.setAttribute("cy", f.y(vals[i])); dot.setAttribute("visibility", "visible"); }
+    else dot.setAttribute("visibility", "hidden");
+    showTip(ev, bucketLabel(b.t, true), [[label, vals[i] === null ? "aucune réponse" : fmt(vals[i]), color]]);
+  })));
+  f.svg.addEventListener("pointerleave", () => { cross.setAttribute("visibility", "hidden"); dot.setAttribute("visibility", "hidden"); });
+  xLabels(f, buckets);
+  f.svg.setAttribute("aria-label", label);
+  container.replaceChildren(f.svg);
+}
+
+function hbars(rows) {
+  if (!rows.length) return EMPTY();
+  const max = Math.max(...rows.map((r) => r.value));
+  return el("div", { class: "hbar" }, rows.slice(0, 10).map((r) => [
+    el("span", { class: "label", title: r.label }, r.label),
+    el("span", { class: "track" },
+      el("span", { class: "fill", style: `width:${(r.value / max) * 62}%` }),
+      el("span", { class: "val" }, r.value.toLocaleString("fr-FR")),
+      r.note ? el("span", { class: "muted" }, r.note) : null),
+  ]));
+}
+
+// Vue tableau de chaque graphique : les mêmes chiffres, sans couleur ni survol.
+const chartTables = {};
+function renderCharts(rows) {
+  const buckets = fillBuckets(rows);
+  const rate = (b) => (b.hit + b.miss ? b.hit / (b.hit + b.miss) : null);
+  $("volume-legend").replaceChildren(...Object.values(OUTCOMES).map(([label, color]) => tag(label, color)));
+  stackedColumns($("volume"), buckets);
+  lineChart($("cacherate"), buckets, rate, (v) => `${Math.round(v * 100)} %`, "var(--s1)", "Taux de cache");
+  singleColumns($("cost"), buckets, (b) => b.cost_eur,
+    (v) => v.toLocaleString("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: v && v < 1 ? 2 : 0 }),
+    "var(--s1)", "Coût estimé");
+  const when = (b) => bucketLabel(b.t, true);
+  chartTables.volume = () => table(["Période", "Cache", "Recherche", "Sans réponse", "Total"],
+    buckets.map((b) => [when(b), b.hit, b.miss, b.unanswered, b.hit + b.miss + b.unanswered]), [1, 2, 3, 4]);
+  chartTables.cacherate = () => table(["Période", "Taux de cache"],
+    buckets.map((b) => [when(b), rate(b) === null ? "—" : pct(rate(b))]), [1]);
+  chartTables.cost = () => table(["Période", "Coût estimé"], buckets.map((b) => [when(b), eur(b.cost_eur)]), [1]);
+  // Une vue tableau ouverte le reste lors des rafraîchissements automatiques.
+  document.querySelectorAll('[data-table][aria-pressed="true"]').forEach((b) =>
+    $(b.dataset.table).replaceChildren(el("div", { class: "scroll" }, chartTables[b.dataset.table]())));
+}
+document.querySelectorAll("[data-table]").forEach((btn) => btn.addEventListener("click", () => {
+  const box = $(btn.dataset.table);
+  const showing = btn.getAttribute("aria-pressed") === "true";
+  btn.setAttribute("aria-pressed", String(!showing));
+  btn.textContent = showing ? "Tableau" : "Graphique";
+  if (showing) refresh(); else if (chartTables[btn.dataset.table]) box.replaceChildren(el("div", { class: "scroll" }, chartTables[btn.dataset.table]()));
+}));
+function markPeriod() {
+  document.querySelectorAll("[data-days]").forEach((b) => b.setAttribute("aria-pressed", String(Number(b.dataset.days) === period)));
+}
+document.querySelectorAll("[data-days]").forEach((b) => b.addEventListener("click", () => {
+  period = Number(b.dataset.days);
+  try { localStorage.setItem("nm304_period", String(period)); } catch (e) {}
+  markPeriod();
+  refresh();
+}));
+markPeriod();
+let resizeTimer;
+window.addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { if (token) refresh(); }, 250); });
+
 async function refresh() {
   try {
-    const [stats, requests, answers, keys, feedback] = await Promise.all([
-      api("/admin/stats"), api("/admin/requests?limit=20"), api("/admin/answers?limit=50"), api("/admin/keys"),
+    $("app").classList.add("loading");
+    const tz = -new Date().getTimezoneOffset();
+    const [stats, requests, answers, keys, feedback, series] = await Promise.all([
+      api(`/admin/stats?days=${period}`), api("/admin/requests?limit=20"), api("/admin/answers?limit=50"), api("/admin/keys"),
       api("/admin/feedback?limit=30"),
+      api(`/admin/timeseries?days=${period}&bucket=${bucketKind()}&tz_offset_min=${tz}`),
     ]);
     renderStats(stats); renderRequests(requests); renderAnswers(answers); renderKeys(keys);
     renderClients(stats); renderFeedback(feedback);
+    renderCharts(series);
+    $("app").classList.remove("loading");
     $("login").hidden = true; $("app").hidden = false;
     $("status").textContent = "Mis à jour à " + new Date().toLocaleTimeString("fr-FR") + " · rafraîchi toutes les 30 s";
   } catch (e) {
+    $("app").classList.remove("loading");
     if (e.message === "auth") { logout("Jeton refusé."); return; }
     $("status").textContent = "Impossible de joindre le service (" + e.message + ").";
   }

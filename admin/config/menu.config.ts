@@ -1,18 +1,36 @@
-import { Bot, Database, History, KeyRound, LayoutDashboard, MessageSquareReply } from 'lucide-react';
+import { Bot, Database, History, KeyRound, Layers, LayoutDashboard, MessageSquareReply } from 'lucide-react';
 import { type NavConfig } from './types';
 
 export const MAIN_NAV: NavConfig = [
   {
     id: 'pilotage',
     title: 'Pilotage',
-    items: [{ id: 'dashboard', title: 'Tableau de bord', icon: LayoutDashboard, path: '/' }],
+    items: [
+      {
+        id: 'dashboard',
+        title: 'Tableau de bord',
+        icon: LayoutDashboard,
+        path: '/',
+      },
+      {
+        id: 'specialites',
+        title: 'Spécialités',
+        icon: Layers,
+        path: '/specialites',
+      },
+    ],
   },
   {
     id: 'activite',
     title: 'Activité des agents',
     items: [
       { id: 'requetes', title: 'Requêtes', icon: History, path: '/requetes' },
-      { id: 'retours', title: 'Retours des agents', icon: MessageSquareReply, path: '/retours' },
+      {
+        id: 'retours',
+        title: 'Retours des agents',
+        icon: MessageSquareReply,
+        path: '/retours',
+      },
       { id: 'agents', title: 'Agents', icon: Bot, path: '/agents' },
     ],
   },
@@ -20,7 +38,12 @@ export const MAIN_NAV: NavConfig = [
     id: 'service',
     title: 'Service',
     items: [
-      { id: 'reponses', title: 'Réponses en mémoire', icon: Database, path: '/reponses' },
+      {
+        id: 'reponses',
+        title: 'Réponses en mémoire',
+        icon: Database,
+        path: '/reponses',
+      },
       {
         id: 'cles',
         title: "Clés d'API",

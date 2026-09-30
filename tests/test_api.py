@@ -129,6 +129,13 @@ def test_llms_txt(setup):
     assert "facturation : Facturation électronique" in text
 
 
+def test_settings_for_dashboard(setup):
+    client, _, _ = setup
+    s = client.get("/internal/settings", headers=ADMIN).json()
+    assert s["search_enabled"] is True and s["mcp_url"].endswith("/mcp")
+    assert client.get("/internal/settings").status_code == 403
+
+
 def test_public_home_and_domains(setup):
     client, _, _ = setup
     home = client.get("/")

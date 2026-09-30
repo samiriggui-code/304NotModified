@@ -326,6 +326,22 @@ def create_app(store: Store | None = None, resolver: Resolver | None = None) -> 
             )
         return sorted(rows, key=lambda r: (not r["specialty"], -r["requests"], r["label"]))
 
+    @app.get("/internal/settings", dependencies=[Depends(require_admin)], include_in_schema=False)
+    def settings():
+        return {
+            "public_url": config.PUBLIC_URL,
+            "mcp_url": f"{config.PUBLIC_URL}/mcp",
+            # Recherche fraîche active seulement si un fournisseur est configuré (clé présente).
+            "resolver": type(resolver).__name__,
+            "search_enabled": not isinstance(resolver, NullResolver),
+            "anon_daily_limit": config.ANON_DAILY_LIMIT,
+            "self_service_quota": config.SELF_SERVICE_QUOTA,
+            "free_quota": config.FREE_QUOTA,
+            "price_per_request_eur": config.PRICE_PER_REQUEST_EUR,
+            "log_retention_days": config.LOG_RETENTION_DAYS,
+            "max_question_chars": config.MAX_QUESTION_CHARS,
+        }
+
     @app.get("/internal/keys", dependencies=[Depends(require_admin)], include_in_schema=False)
     def list_keys():
         return store.list_keys()

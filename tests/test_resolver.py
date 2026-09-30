@@ -104,3 +104,11 @@ def test_regulation_guidance_points_to_official_sources():
     system = client.requests[0]["system"]
     assert "Légifrance" in system and "impots.gouv.fr" in system
     assert "conseil personnalisé" in system
+
+
+def test_einvoicing_guidance_asks_for_spec_versions():
+    client = FakeClient([message([NS(type="text", text=FINAL, citations=None)])])
+    ClaudeResolver(client).resolve("Quelle version de la norme XP Z12-013 ?", "facturation")
+
+    system = client.requests[0]["system"]
+    assert "XP Z12-013" in system and "numéro de version" in system

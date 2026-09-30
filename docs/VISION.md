@@ -39,9 +39,9 @@ chacun de son côté. Avec 304NotModified, une seule question aurait suffi.
 changent chaque mois. Tous les agents qui écrivent du code ont ce problème.
 
 *Mise à jour du même jour* : ce besoin est réel, mais **Context7 y répond déjà** (voir §5).
-Premier domaine retenu à la place : **la réglementation des entreprises, en commençant par la
-facturation électronique** (voir §12). Le même problème s'y pose : en vérifiant le calendrier de
-l'AI Act, la mémoire de Claude donnait une date déjà reportée (cas n°4 de `CAS_REELS.md`).
+Premier domaine retenu à la place : **l'intégration technique de la facturation électronique
+française** (voir §12). Le même problème s'y pose : en cherchant la version en vigueur des normes,
+des pages sérieuses et récentes se contredisaient (cas n°5 de `CAS_REELS.md`).
 
 Tous ces cas sont notés au fur et à mesure dans [`CAS_REELS.md`](CAS_REELS.md).
 
@@ -244,7 +244,7 @@ Une seule intégration peut produire des centaines de milliers d'appels par mois
 
 1. **Mesurer** : mettre la version d'essai en ligne sur un hébergement peu coûteux, la faire
    tester par quelques agents et relever les chiffres ci-dessus.
-2. **Choisir le premier domaine** d'après les mesures. *Fait : réglementation, facturation électronique d'abord (§12), à confirmer par les mesures.* Les candidats : prix et disponibilité,
+2. **Choisir le premier domaine** d'après les mesures. *Fait : intégration technique de la facturation électronique (§12), à confirmer par les mesures.* Les candidats : prix et disponibilité,
    versions de logiciels et d'API, informations d'entreprises, réglementation.
 3. **Serveur MCP et bibliothèques**, pour la distribution.
 4. **Paiement par crédits Stripe**, puis x402.
@@ -272,17 +272,22 @@ Une seule intégration peut produire des centaines de milliers d'appels par mois
 
 ## 12. Questions ouvertes
 
-- ~~Quel premier domaine ?~~ **Décidé le 30 septembre 2026 : la réglementation des entreprises
-  (France d'abord, puis UE), en commençant par la facturation électronique**, obligatoire depuis
-  le 1er septembre 2026 et source de questions pour toutes les entreprises. `logiciel` avait
-  d'abord été choisi, puis écarté le même jour (Context7 l'occupe, §5). Raisons : aucun concurrent
-  trouvé qui vende la réponse finale (l'API Légifrance donne des textes bruts), une erreur coûte
-  cher (prix plus élevé possible), les règles changent sans changer chaque jour (bon taux de cache),
-  le fondateur est francophone et en France.
-  Clients visés : éditeurs de logiciels de comptabilité, paie, RH et juridique qui ajoutent des
-  agents, cabinets d'expertise comptable.
-  **Limite à respecter** : information générale sourcée, jamais de conseil juridique personnalisé
-  (activité réservée en France). À faire valider par un avocat avant le lancement commercial.
+- ~~Quel premier domaine ?~~ **Décidé le 30 septembre 2026 : l'intégration technique de la
+  facturation électronique française** (domaine `facturation`) : formats (Factur-X, UBL, CII),
+  normes AFNOR XP Z12-012/013/014, API des plateformes agréées, annuaire, statuts de cycle de
+  vie, e-reporting, Peppol.
+  Pourquoi : la réforme est entrée en vigueur le 1er septembre 2026 et toutes les entreprises
+  sont concernées ; les éditeurs de logiciels doivent tous se brancher sur des plateformes
+  agréées ; les spécifications changent souvent (nouvelles versions des trois normes AFNOR le
+  30 juin 2026) et les pages répandues se contredisent (cas n°5 de `CAS_REELS.md`). C'est
+  exactement ce que 304NotModified résout : la bonne version, avec sa source officielle, à jour.
+  Clients visés : éditeurs de logiciels (comptabilité, gestion, ERP, caisse), intégrateurs et
+  ESN, développeurs de « solutions compatibles », et leurs agents qui écrivent du code.
+  Choix précédents écartés le même jour : `logiciel` en général (Context7 l'occupe, §5), puis la
+  réglementation juridique (risque de conseil juridique, et moins utile aux développeurs).
+  **À surveiller** : Context7 pourrait indexer une partie de ces documents (les swaggers par
+  exemple) ; notre différence est la réponse finale sur des documents officiels dispersés
+  (PDF, Excel, zip sur impots.gouv, AFNOR, FNFE-MPE), avec la version et la date.
 - Quel prix par requête, et une offre « réponse garantie » plus chère ?
 - Comment trouver les 10 premiers agents ou développeurs utilisateurs ?
 - À partir de quel volume passer de SQLite à une base plus robuste ?

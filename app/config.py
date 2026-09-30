@@ -10,14 +10,32 @@ DOMAIN_TTL_SECONDS = {
     "logiciel": 86400,  # versions, API, bibliothèques
     "entreprise": 86400,  # coordonnées, horaires, activité d'une entreprise
     "reglementation": 7 * 86400,  # lois, normes, référentiels
+    # Intégration technique de la facturation électronique (formats, API, normes, plateformes) :
+    # les spécifications et la liste des plateformes agréées bougent souvent pendant le déploiement.
+    "facturation": 86400,
     "general": 86400,
 }
 DEFAULT_DOMAIN = "general"
 
 # Consignes de recherche propres à un domaine, ajoutées à la consigne générale du chercheur.
-# Premier domaine choisi : « reglementation » (entreprises, France puis UE), en commençant par la
-# facturation électronique (voir docs/VISION.md, §12).
+# Premier domaine choisi : « facturation », l'intégration technique de la facturation électronique
+# française (voir docs/VISION.md, §12).
 DOMAIN_GUIDANCE = {
+    "facturation": (
+        "Questions techniques sur la facturation électronique française (formats, API, normes, plateformes\n"
+        "agréées, annuaire, statuts de cycle de vie, e-reporting, Peppol, intégration dans un logiciel) :\n"
+        "- Appuie-toi d'abord sur les sources officielles : impots.gouv.fr (spécifications externes B2B,\n"
+        "  liste officielle des plateformes agréées), AIFE (aife.economie.gouv.fr, Chorus Pro), normes AFNOR\n"
+        "  XP Z12-012 (formats et statuts), XP Z12-013 (API entre logiciels et plateformes) et XP Z12-014\n"
+        "  (cas d'usage), FNFE-MPE (Factur-X, annexes, swaggers), norme européenne EN 16931, OpenPeppol.\n"
+        "  Un blog d'éditeur ou de plateforme peut aider à trouver le document, mais ne suffit pas seul.\n"
+        "- Donne toujours le numéro de version et la date de publication du document de référence, et\n"
+        "  vérifie qu'aucune version plus récente n'est sortie. Beaucoup de pages citent une version dépassée.\n"
+        "- Si les sources se contredisent (versions, chiffres, noms), dis-le, indique laquelle fait foi\n"
+        "  et baisse la confiance.\n"
+        "- Réponds de façon technique et précise (noms de champs, codes, flux, routes d'API) quand la\n"
+        "  question le demande."
+    ),
     "reglementation": (
         "Questions sur une obligation réglementaire, fiscale ou sociale des entreprises (France, Union européenne) :\n"
         "- Appuie-toi d'abord sur les sources officielles : Légifrance, EUR-Lex, Journal officiel,\n"

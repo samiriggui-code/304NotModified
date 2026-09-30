@@ -114,15 +114,16 @@ Avec Claude Code : `claude mcp add 304notmodified -e NM304_URL=http://localhost:
 | Domaine | Fraîcheur par défaut |
 |---|---|
 | `prix`, `actualite` | 1 heure |
-| `logiciel`, `entreprise`, `general` | 24 heures |
+| `logiciel`, `entreprise`, `facturation`, `general` | 24 heures |
 | `reglementation` | 7 jours |
 
 Ces durées se règlent dans `app/config.py`.
 
-**Premier domaine : `reglementation`**, obligations des entreprises en France puis dans l'UE, en
-commençant par la facturation électronique. Le chercheur s'appuie d'abord sur les sources
-officielles (Légifrance, EUR-Lex, impots.gouv.fr, BOFiP, service-public.fr…), vérifie les reports
-récents et reste sur de l'information générale (`DOMAIN_GUIDANCE` dans `app/config.py`).
+**Premier domaine : `facturation`**, l'intégration technique de la facturation électronique
+française (formats, normes AFNOR XP Z12-012/013/014, API des plateformes agréées, annuaire,
+statuts, e-reporting, Peppol). Le chercheur s'appuie d'abord sur les documents officiels
+(impots.gouv.fr, AIFE, AFNOR, FNFE-MPE, EN 16931, OpenPeppol), donne toujours la version et la date
+du document de référence et signale les contradictions (`DOMAIN_GUIDANCE` dans `app/config.py`).
 Des questions de référence pour tester le service : [`docs/QUESTIONS_TEST.md`](docs/QUESTIONS_TEST.md).
 
 ## Vérifier avant chaque commit

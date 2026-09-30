@@ -1,22 +1,23 @@
-# Questions de référence : facturation électronique
+# Questions de référence : intégration technique de la facturation électronique
 
-> À poser au service une fois la clé Anthropic activée, pour juger la qualité des réponses
-> (exactitude, sources officielles, dates, confiance) avant de démarcher des clients.
-> Chaque réponse doit être relue par un humain et comparée à la source officielle.
-> Pour chaque question, noter : réponse juste ou fausse, sources citées, confiance, coût, durée.
+> À poser au service (domaine `facturation`) une fois la clé Anthropic activée, pour juger la
+> qualité des réponses avant de démarcher des éditeurs de logiciels. Chaque réponse doit être
+> relue par un humain et comparée au document officiel.
+> Pour chaque question, noter : réponse juste ou fausse, version du document citée, sources,
+> confiance, coût, durée.
 
-1. Depuis quand une entreprise française doit-elle pouvoir recevoir des factures électroniques ?
-2. À partir de quand une PME doit-elle émettre ses factures au format électronique ?
-3. Une micro-entreprise en franchise de TVA est-elle concernée par la facturation électronique ?
-4. Qu'est-ce qu'une plateforme agréée (anciennement PDP) pour la facturation électronique ?
-5. Quels formats de facture électronique sont acceptés en France (Factur-X, UBL, CII) ?
-6. Qu'est-ce que l'e-reporting et qui doit le faire ?
-7. Quelles nouvelles mentions obligatoires doivent figurer sur les factures avec la réforme ?
-8. Quelles sanctions en cas de non-respect de l'obligation de facturation électronique ?
-9. Les factures entre une entreprise et un particulier (B2C) sont-elles concernées ?
-10. Les factures reçues d'un fournisseur étranger sont-elles concernées par la réforme ?
-
-Questions hors facturation, pour vérifier que les reports récents sont bien détectés :
-
-11. À partir de quand s'appliquent les obligations de l'AI Act pour l'IA à haut risque ?
-    (piège connu : la date d'origine, le 2 août 2026, a été reportée ; voir `CAS_REELS.md`, cas n°4)
+1. Quelle est la version en vigueur de la norme AFNOR XP Z12-013 (API entre logiciels et
+   plateformes agréées), et quelle est sa date ? (piège connu : des pages récentes citent encore
+   la version de février 2026 alors qu'une version du 30 juin 2026 existe)
+2. Quels flux couvre la norme XP Z12-013 (émission et réception, statuts, e-reporting, annuaire) ?
+3. Quelle méthode d'authentification l'API XP Z12-013 impose-t-elle ?
+4. Où télécharger les swaggers officiels de l'API XP Z12-013 ?
+5. Quels formats de facture structurée sont acceptés (Factur-X, UBL, CII) et avec quels profils ?
+6. Quels sont les statuts de cycle de vie obligatoires, et leurs codes ?
+7. Quelle est la dernière version des spécifications externes de la DGFiP ?
+8. Combien y a-t-il de plateformes agréées, et où trouver la liste officielle ? (piège connu :
+   les chiffres varient selon les sources)
+9. Comment interroger l'annuaire pour trouver la plateforme d'un destinataire à partir de son SIREN ?
+10. Les échanges entre plateformes agréées passent-ils par Peppol ?
+11. Quelle est la différence entre une plateforme agréée et une solution compatible ?
+12. Quelles données transmettre en e-reporting, et à quelle fréquence ?

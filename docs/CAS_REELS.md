@@ -84,3 +84,24 @@
   (annexe I), après le report voté dans l'omnibus numérique. Les obligations de transparence
   (article 50) s'appliquent depuis le 2 août 2026, avec un délai au 2 décembre 2026 pour le
   marquage des contenus des systèmes déjà sur le marché. » Avec les sources et la date.
+
+## 5. Facturation électronique : versions des normes et chiffres contradictoires
+
+- **Date** : 30 septembre 2026
+- **Domaine** : `facturation`
+- **Question** : « Quelle est la version en vigueur de la norme AFNOR XP Z12-013 (API entre les
+  logiciels et les plateformes agréées), et combien y a-t-il de plateformes agréées ? »
+- **Ce qui s'est passé** : en cherchant, trois pages sérieuses donnaient des informations
+  différentes. Un guide publié le 17 juin 2026 présente la version du **26 février 2026** comme
+  « en vigueur », alors que la FNFE-MPE annonce de **nouvelles versions des trois normes au
+  30 juin 2026** (XP Z12-014 en 1.4.0). Pour le nombre de plateformes agréées : **136** (108
+  définitives et 28 sous réserve, selon l'AIFE), **134** fin mai 2026 (même guide), **107** (page
+  d'un éditeur). Un développeur ou un agent qui lit la mauvaise page code sur une version dépassée.
+- **Source de la bonne réponse** : https://www.impots.gouv.fr/specifications-externes-b2b (versions
+  applicables), https://fnfe-mpe.org/ressources/ (publication du 30 juin 2026),
+  https://aife.economie.gouv.fr/nos-applications/facturation-electronique-b2b/ et la liste
+  officielle https://www.impots.gouv.fr/je-consulte-la-liste-des-plateformes-agreees.
+  Version exacte et nombre de plateformes à relire directement sur ces pages : pas encore fait.
+- **Réponse attendue de 304** : la version applicable selon impots.gouv.fr, avec sa date, le
+  lien vers les swaggers officiels, et le nombre de plateformes lu sur la liste officielle du jour,
+  en signalant que des pages répandues citent des versions ou des chiffres dépassés.

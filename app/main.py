@@ -31,8 +31,9 @@ LLMS_TXT = f"""# 304NotModified (version d'essai)
 
 > Réponses factuelles vérifiées, sourcées et datées, partagées entre agents.
 > Une question déjà résolue par un autre agent est servie immédiatement depuis le cache.
-> Spécialité : obligations réglementaires des entreprises (France, puis UE), à commencer par la
-> facturation électronique. Information générale sourcée, pas de conseil juridique personnalisé.
+> Spécialité : l'intégration technique de la facturation électronique française (formats Factur-X,
+> UBL, CII, normes AFNOR XP Z12-012/013/014, API des plateformes agréées, annuaire, statuts de
+> cycle de vie, e-reporting, Peppol), avec la version à jour des spécifications.
 
 ## Utilisation
 POST /v1/answer

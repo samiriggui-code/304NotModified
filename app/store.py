@@ -31,6 +31,28 @@ CREATE TABLE IF NOT EXISTS requests (
     cost_eur REAL NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS requests_key ON requests(key);
+-- Chaque réponse produite est gardée : on sait exactement ce qui a été servi à chaque requête,
+-- même après un rafraîchissement.
+CREATE TABLE IF NOT EXISTS answer_versions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    key TEXT NOT NULL,
+    question TEXT NOT NULL,
+    domain TEXT NOT NULL,
+    answer TEXT NOT NULL,
+    sources TEXT NOT NULL,
+    confidence REAL NOT NULL,
+    created_at REAL NOT NULL,
+    expires_at REAL NOT NULL
+);
+-- Retours des agents. Ils sont notés à part et ne modifient jamais les réponses en mémoire.
+CREATE TABLE IF NOT EXISTS feedback (
+    request_id TEXT PRIMARY KEY,
+    ts REAL NOT NULL,
+    api_key TEXT NOT NULL,
+    useful INTEGER NOT NULL,
+    issue TEXT,
+    comment TEXT
+);
 CREATE TABLE IF NOT EXISTS api_keys (
     key TEXT PRIMARY KEY,
     label TEXT NOT NULL,
@@ -39,6 +61,19 @@ CREATE TABLE IF NOT EXISTS api_keys (
     created_at REAL NOT NULL
 );
 """
+
+
+# Colonnes ajoutées après la première version : créées au démarrage si la base est ancienne.
+MIGRATIONS = {
+    "answers": {"version_id": "INTEGER"},
+    "requests": {
+        "request_id": "TEXT",
+        "channel": "TEXT",  # http | mcp
+        "client": "TEXT",  # nom et version de l'agent ou de son outil
+        "context": "TEXT",  # ce que l'agent était en train de faire, s'il l'a dit
+        "answer_version_id": "INTEGER",
+    },
+}
 
 
 @dataclass
@@ -51,6 +86,7 @@ class CachedAnswer:
     confidence: float
     created_at: float
     expires_at: float
+    version_id: int | None = None
 
 
 class Store:
@@ -60,6 +96,13 @@ class Store:
         self._lock = threading.Lock()
         with self._lock:
             self._db.executescript(SCHEMA)
+            for table, columns in MIGRATIONS.items():
+                existing = {r["name"] for r in self._db.execute(f"PRAGMA table_info({table})")}
+                for name, kind in columns.items():
+                    if name not in existing:
+                        self._db.execute(f"ALTER TABLE {table} ADD COLUMN {name} {kind}")
+            self._db.execute("CREATE UNIQUE INDEX IF NOT EXISTS requests_request_id ON requests(request_id)")
+            self._db.commit()
 
     # --- clés d'API -------------------------------------------------------
 
@@ -93,24 +136,34 @@ class Store:
             self._db.commit()
         return _to_answer(row)
 
-    def put(self, answer: CachedAnswer) -> None:
+    def put(self, answer: CachedAnswer) -> int:
+        """Met la réponse en cache et en garde une version permanente ; renvoie l'identifiant de version."""
+        values = (
+            answer.key,
+            answer.question,
+            answer.domain,
+            answer.answer,
+            json.dumps(answer.sources, ensure_ascii=False),
+            answer.confidence,
+            answer.created_at,
+            answer.expires_at,
+        )
         with self._lock:
-            self._db.execute(
-                """INSERT OR REPLACE INTO answers
+            version_id = self._db.execute(
+                """INSERT INTO answer_versions
                    (key, question, domain, answer, sources, confidence, created_at, expires_at)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-                (
-                    answer.key,
-                    answer.question,
-                    answer.domain,
-                    answer.answer,
-                    json.dumps(answer.sources, ensure_ascii=False),
-                    answer.confidence,
-                    answer.created_at,
-                    answer.expires_at,
-                ),
+                values,
+            ).lastrowid
+            self._db.execute(
+                """INSERT OR REPLACE INTO answers
+                   (key, question, domain, answer, sources, confidence, created_at, expires_at, version_id)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (*values, version_id),
             )
             self._db.commit()
+        answer.version_id = version_id
+        return version_id
 
     def list_keys(self) -> list[dict]:
         with self._lock:
@@ -125,9 +178,13 @@ class Store:
     def recent_requests(self, limit: int) -> list[dict]:
         with self._lock:
             rows = self._db.execute(
-                """SELECT r.ts, r.question, r.domain, r.outcome, r.latency_ms, r.cost_eur,
-                          COALESCE(k.label, '?') AS key_label
+                """SELECT r.ts, r.request_id, r.question, r.domain, r.outcome, r.latency_ms, r.cost_eur,
+                          COALESCE(k.label, '?') AS key_label, COALESCE(r.channel, 'http') AS channel,
+                          r.client, r.context, v.answer, v.confidence,
+                          f.useful AS feedback_useful, f.issue AS feedback_issue
                    FROM requests r LEFT JOIN api_keys k ON k.key = r.api_key
+                   LEFT JOIN answer_versions v ON v.id = r.answer_version_id
+                   LEFT JOIN feedback f ON f.request_id = r.request_id
                    ORDER BY r.id DESC LIMIT ?""",
                 (limit,),
             ).fetchall()
@@ -140,14 +197,84 @@ class Store:
 
     # --- journal et statistiques -----------------------------------------
 
-    def log(self, *, api_key, key, question, domain, outcome, latency_ms, cost_eur=0.0):
+    def log(
+        self,
+        *,
+        api_key,
+        key,
+        question,
+        domain,
+        outcome,
+        latency_ms,
+        cost_eur=0.0,
+        request_id=None,
+        channel="http",
+        client=None,
+        context=None,
+        answer_version_id=None,
+    ) -> str:
+        request_id = request_id or "req_" + secrets.token_urlsafe(12)
         with self._lock:
             self._db.execute(
                 """INSERT INTO requests
-                   (ts, api_key, key, question, domain, outcome, latency_ms, cost_eur)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-                (time.time(), api_key, key, question, domain, outcome, latency_ms, cost_eur),
+                   (ts, api_key, key, question, domain, outcome, latency_ms, cost_eur,
+                    request_id, channel, client, context, answer_version_id)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    time.time(),
+                    api_key,
+                    key,
+                    question,
+                    domain,
+                    outcome,
+                    latency_ms,
+                    cost_eur,
+                    request_id,
+                    channel,
+                    client,
+                    context,
+                    answer_version_id,
+                ),
             )
+            self._db.commit()
+        return request_id
+
+    # --- retours des agents ------------------------------------------------
+
+    def add_feedback(self, *, request_id, api_key, useful, issue=None, comment=None) -> bool:
+        """Note le retour d'un agent sur une de SES requêtes. Ne touche jamais aux réponses."""
+        with self._lock:
+            owner = self._db.execute("SELECT api_key FROM requests WHERE request_id = ?", (request_id,)).fetchone()
+            if owner is None or owner["api_key"] != api_key:
+                return False
+            self._db.execute(
+                """INSERT OR REPLACE INTO feedback (request_id, ts, api_key, useful, issue, comment)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (request_id, time.time(), api_key, int(useful), issue, comment),
+            )
+            self._db.commit()
+        return True
+
+    def list_feedback(self, limit: int) -> list[dict]:
+        with self._lock:
+            rows = self._db.execute(
+                """SELECT f.ts, f.useful, f.issue, f.comment, r.question, r.domain, r.client, r.request_id,
+                          v.answer
+                   FROM feedback f JOIN requests r ON r.request_id = f.request_id
+                   LEFT JOIN answer_versions v ON v.id = r.answer_version_id
+                   ORDER BY f.ts DESC LIMIT ?""",
+                (limit,),
+            ).fetchall()
+        return [{**dict(r), "useful": bool(r["useful"])} for r in rows]
+
+    def purge_older_than(self, days: int) -> None:
+        """Efface le journal des requêtes (et leurs retours) plus ancien que `days` jours."""
+        cutoff = time.time() - days * 86400
+        with self._lock:
+            self._db.execute(
+                "DELETE FROM feedback WHERE request_id IN (SELECT request_id FROM requests WHERE ts < ?)", (cutoff,)
+            )
+            self._db.execute("DELETE FROM requests WHERE ts < ?", (cutoff,))
             self._db.commit()
 
     def stats(self, price_per_request_eur: float) -> dict:
@@ -185,6 +312,19 @@ class Store:
                 ).fetchall()
             ]
 
+            channels = dict(q("SELECT COALESCE(channel, 'http'), COUNT(*) FROM requests GROUP BY 1").fetchall())
+            clients = [
+                dict(r)
+                for r in q(
+                    """SELECT COALESCE(client, 'inconnu') AS client, COUNT(*) AS requests
+                       FROM requests GROUP BY 1 ORDER BY 2 DESC LIMIT 20"""
+                ).fetchall()
+            ]
+            fb = q("SELECT COUNT(*) AS n, COALESCE(SUM(useful), 0) AS useful FROM feedback").fetchone()
+            fb_issues = dict(
+                q("SELECT issue, COUNT(*) FROM feedback WHERE issue IS NOT NULL GROUP BY issue").fetchall()
+            )
+
         answered = by_outcome.get("hit", 0) + by_outcome.get("miss", 0)
         revenue = answered * price_per_request_eur
         return {
@@ -202,6 +342,13 @@ class Store:
             "domains": domains,
             "top_repeated_questions": top,
             "top_unanswered_questions": unanswered,
+            "channels": channels,
+            "clients": clients,
+            "feedback": {
+                "count": fb["n"],
+                "useful_rate": round(fb["useful"] / fb["n"], 3) if fb["n"] else 0.0,
+                "issues": fb_issues,
+            },
         }
 
 
@@ -215,4 +362,5 @@ def _to_answer(row: sqlite3.Row) -> CachedAnswer:
         confidence=row["confidence"],
         created_at=row["created_at"],
         expires_at=row["expires_at"],
+        version_id=row["version_id"],
     )

@@ -53,6 +53,8 @@
   button { font: inherit; padding: 8px 14px; border: 0; border-radius: 8px; background: var(--accent);
            color: #fff; cursor: pointer; }
   button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+  tr.req { cursor: pointer; }
+  tr.detail td { background: var(--bg); font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; }
   .newkey { margin-top: 10px; padding: 10px; border-radius: 8px; border: 1px dashed var(--accent);
             overflow-wrap: anywhere; font-family: ui-monospace, monospace; font-size: 13px; }
   .error { color: var(--bad); }
@@ -101,7 +103,20 @@
       <section class="card"><h2>Temps de réponse moyen</h2><div class="scroll" id="latency"></div></section>
     </div>
 
-    <section class="card"><h2>Dernières requêtes</h2><div class="scroll" id="requests"></div></section>
+    <section class="card">
+      <h2>Dernières requêtes</h2>
+      <p class="muted" style="margin-top:-4px">Touchez une ligne pour voir ce que l'agent faisait et la réponse qu'il a reçue.</p>
+      <div class="scroll" id="requests"></div>
+    </section>
+
+    <div class="grid2">
+      <section class="card"><h2>Agents</h2><div class="scroll" id="clients"></div></section>
+      <section class="card">
+        <h2>Retours des agents</h2>
+        <p class="muted" style="margin-top:-4px">Notés à part : un retour ne modifie jamais une réponse.</p>
+        <div class="scroll" id="feedback"></div>
+      </section>
+    </div>
 
     <section class="card">
       <h2>Réponses en mémoire</h2>
@@ -185,6 +200,7 @@ function renderStats(s) {
     ["Revenu estimé", eur(s.estimated_revenue_eur), false],
     ["Coût estimé", eur(s.estimated_cost_eur), false],
     ["Marge estimée", eur(s.estimated_margin_eur), false],
+    ["Retours utiles", s.feedback.count ? `${pct(s.feedback.useful_rate)} (${s.feedback.count})` : "aucun", true],
   ];
   $("tiles").replaceChildren(...tiles.map(([label, value, key]) =>
     el("div", { class: "tile" + (key ? " key" : "") }, el("span", { class: "muted" }, label), el("b", {}, value))));
@@ -203,10 +219,44 @@ function renderStats(s) {
     Object.entries(s.avg_latency_ms).map(([o, ms]) => [pill(o), `${ms.toLocaleString("fr-FR")} ms`]), [1]));
 }
 
+const ISSUES = { wrong: "fausse", outdated: "périmée", incomplete: "incomplète", bad_source: "mauvaise source", other: "autre" };
+function feedbackPill(useful, issue) {
+  if (useful === null || useful === undefined) return "";
+  const label = useful ? "utile" : "pas utile" + (issue ? " · " + (ISSUES[issue] || issue) : "");
+  return el("span", { class: "pill", style: `background:${useful ? "var(--hit)" : "var(--bad)"}` }, label);
+}
+
 function renderRequests(rows) {
-  $("requests").replaceChildren(table(["Date", "Question", "Domaine", "Origine", "Durée", "Coût", "Clé"],
-    rows.map((r) => [date(r.ts), r.question, r.domain || "?", pill(r.outcome), `${r.latency_ms} ms`, eur(r.cost_eur), r.key_label]),
-    [4, 5]));
+  if (!rows.length) { $("requests").replaceChildren(el("p", { class: "muted" }, "Rien pour l'instant.")); return; }
+  const headers = ["Date", "Question", "Domaine", "Origine", "Agent", "Retour", "Durée", "Coût"];
+  const body = el("tbody");
+  for (const r of rows) {
+    const line = el("tr", { class: "req" },
+      [date(r.ts), r.question, r.domain || "?", pill(r.outcome), `${r.channel} · ${r.client || r.key_label}`,
+       feedbackPill(r.feedback_useful === null ? null : Boolean(r.feedback_useful), r.feedback_issue),
+       `${r.latency_ms} ms`, eur(r.cost_eur)].map((c, i) => el("td", i >= 6 ? { class: "num" } : {}, c)));
+    const detail = el("tr", { class: "detail", hidden: "" }, el("td", { colspan: String(headers.length) },
+      el("b", {}, "Tâche de l'agent : "), r.context || "non précisée", "\n",
+      el("b", {}, "Réponse servie : "), r.answer || "aucune",
+      r.confidence !== null && r.confidence !== undefined ? ` (confiance ${pct(r.confidence)})` : "", "\n",
+      el("span", { class: "muted" }, `Requête ${r.request_id || "?"} · clé ${r.key_label}`)));
+    line.addEventListener("click", () => { detail.hidden = !detail.hidden; });
+    body.append(line, detail);
+  }
+  $("requests").replaceChildren(el("table", {},
+    el("thead", {}, el("tr", {}, headers.map((h, i) => el("th", i >= 6 ? { style: "text-align:right" } : {}, h)))), body));
+}
+
+function renderClients(s) {
+  $("clients").replaceChildren(
+    el("p", { class: "muted", style: "margin:0 0 8px" },
+      Object.entries(s.channels).map(([c, n]) => `${c === "mcp" ? "Par MCP" : "Par l'API"} : ${n}`).join(" · ") || "—"),
+    table(["Agent", "Requêtes"], s.clients.map((c) => [c.client, c.requests]), [1]));
+}
+
+function renderFeedback(rows) {
+  $("feedback").replaceChildren(table(["Date", "Question", "Retour", "Commentaire", "Agent"],
+    rows.map((f) => [date(f.ts), f.question, feedbackPill(f.useful, f.issue), f.comment || "", f.client || "?"])));
 }
 
 function renderAnswers(rows) {
@@ -234,10 +284,12 @@ function renderKeys(rows) {
 
 async function refresh() {
   try {
-    const [stats, requests, answers, keys] = await Promise.all([
+    const [stats, requests, answers, keys, feedback] = await Promise.all([
       api("/admin/stats"), api("/admin/requests?limit=20"), api("/admin/answers?limit=50"), api("/admin/keys"),
+      api("/admin/feedback?limit=30"),
     ]);
     renderStats(stats); renderRequests(requests); renderAnswers(answers); renderKeys(keys);
+    renderClients(stats); renderFeedback(feedback);
     $("login").hidden = true; $("app").hidden = false;
     $("status").textContent = "Mis à jour à " + new Date().toLocaleTimeString("fr-FR") + " · rafraîchi toutes les 30 s";
   } catch (e) {

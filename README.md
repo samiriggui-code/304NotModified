@@ -84,11 +84,25 @@ questions sans réponse.
 curl localhost:8304/admin/stats -H "Authorization: Bearer $ADMIN_TOKEN"
 ```
 
+Champs facultatifs : `context` (la tâche en cours de l'agent) et l'en-tête `X-Client` (nom de
+l'agent). Chaque réponse porte un `request_id`, que l'agent renvoie pour dire si elle l'a aidé :
+
+```bash
+curl -X POST localhost:8304/v1/feedback \
+  -H "X-API-Key: nm304_..." -H "Content-Type: application/json" \
+  -d '{"request_id": "req_...", "useful": false, "issue": "outdated", "comment": "date dépassée"}'
+```
+
+Tout est enregistré (question, contexte, agent, réponse exacte servie, retour) pour savoir quoi
+améliorer. Un retour est noté à part : il ne modifie jamais une réponse. Le journal est effacé
+après `LOG_RETENTION_DAYS` jours (365 par défaut).
+
 Documentation pour les agents : `/llms.txt` et `/docs` (OpenAPI).
 
 ## Brancher un agent par MCP
 
-Le serveur MCP (`mcp_server/`) donne aux agents un outil `ask` (question, domaine facultatif).
+Le serveur MCP (`mcp_server/`) donne aux agents deux outils : `ask` (question, domaine et
+contexte facultatifs) et `feedback` (dire si la réponse a servi). Il transmet le nom de l'agent.
 Il ne fait que relayer vers `POST /v1/answer` avec la clé de l'agent : aucun accès direct à la base.
 
 Configuration type d'un client MCP (Claude Desktop, Claude Code, etc.) :

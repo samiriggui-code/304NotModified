@@ -35,9 +35,9 @@ def test_tool_is_listed_as_read_only(api):
         async with Client(create_server(http, key)) as client:
             return (await client.list_tools()).tools
 
-    [tool] = anyio.run(run)
-    assert tool.name == "ask"
-    assert tool.annotations.read_only_hint is True
+    tools = {t.name: t for t in anyio.run(run)}
+    assert set(tools) == {"ask", "feedback"}
+    assert tools["ask"].annotations.read_only_hint is True
 
 
 def test_ask_goes_through_api_and_cache(api):
@@ -71,3 +71,25 @@ def test_unreachable_service(api):
     down = httpx.Client(base_url="http://127.0.0.1:9", timeout=1)
     result = call(create_server(down, key), "ask", {"question": "Bonjour ?"})
     assert result.is_error and "injoignable" in result.content[0].text
+
+
+def test_mcp_request_is_recorded_with_client_context_and_feedback(api):
+    http, _, key = api
+    server = create_server(http, key)
+
+    result = call(server, "ask", {"question": "Quelle est la réponse ?", "context": "rédige une facture"})
+    request_id = result.structured_content["request_id"]
+    fb = call(server, "feedback", {"request_id": request_id, "useful": False, "issue": "outdated"})
+    assert not fb.is_error and fb.structured_content["status"] == "recorded"
+
+    [row] = http.get("/admin/requests", headers=ADMIN).json()
+    assert row["channel"] == "mcp" and row["client"] == "mcp:mcp/0.1.0"  # nom annoncé par le client de test
+    assert row["context"] == "rédige une facture"
+    assert row["answer"] == "42"
+    assert row["feedback_useful"] == 0 and row["feedback_issue"] == "outdated"
+
+
+def test_feedback_on_unknown_request_is_an_error(api):
+    http, _, key = api
+    result = call(create_server(http, key), "feedback", {"request_id": "req_inconnu", "useful": True})
+    assert result.is_error and "request_id" in result.content[0].text

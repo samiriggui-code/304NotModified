@@ -4,6 +4,7 @@ import hmac
 import os
 import time
 from pathlib import Path
+from typing import Literal
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.responses import HTMLResponse, PlainTextResponse
@@ -20,6 +21,18 @@ class AnswerRequest(BaseModel):
     domain: str | None = Field(
         default=None, description="Indice facultatif : " + ", ".join(sorted(config.DOMAIN_TTL_SECONDS))
     )
+    context: str | None = Field(
+        default=None,
+        max_length=500,
+        description="Facultatif : la tâche en cours de l'agent (sans données personnelles). Aide à améliorer le service.",
+    )
+
+
+class FeedbackRequest(BaseModel):
+    request_id: str = Field(min_length=1, max_length=64)
+    useful: bool = Field(description="La réponse a-t-elle aidé l'agent à accomplir sa tâche ?")
+    issue: Literal["wrong", "outdated", "incomplete", "bad_source", "other"] | None = None
+    comment: str | None = Field(default=None, max_length=1000)
 
 
 class KeyRequest(BaseModel):
@@ -48,9 +61,22 @@ En-tête : X-API-Key: <clé>
 Corps JSON : {{"question": "...", "domain": "facultatif"}}
 Domaines : {", ".join(sorted(config.DOMAIN_TTL_SECONDS))}
 
-Réponse : status (answered | unanswered), answer, sources [url, title], confidence (0-1),
+Corps JSON complet : {{"question": "...", "domain": "facultatif", "context": "facultatif : votre tâche en cours"}}
+En-tête facultatif : X-Client: <nom et version de votre agent>
+
+Réponse : status (answered | unanswered), request_id, answer, sources [url, title], confidence (0-1),
 domain, cached (bool), fetched_at et expires_at (horodatages Unix).
 Vérifiez vous-même les sources si l'enjeu est important : confidence est une estimation.
+
+## Dire si la réponse vous a servi
+POST /v1/feedback (même clé)
+Corps JSON : {{"request_id": "...", "useful": true, "issue": "wrong | outdated | incomplete | bad_source | other",
+"comment": "facultatif"}}
+Votre retour est lu par l'équipe pour améliorer le service ; il ne modifie jamais directement une réponse.
+
+## Données enregistrées
+Chaque requête est enregistrée (question, contexte, réponse servie, nom de l'agent) pour améliorer
+le service, puis effacée après {config.LOG_RETENTION_DAYS} jours. N'envoyez pas de données personnelles.
 
 Documentation OpenAPI : /docs et /openapi.json
 """
@@ -61,6 +87,7 @@ DASHBOARD_HTML = (Path(__file__).parent / "dashboard.html").read_text(encoding="
 
 def create_app(store: Store | None = None, resolver: Resolver | None = None) -> FastAPI:
     store = store or Store(config.DB_PATH)
+    store.purge_older_than(config.LOG_RETENTION_DAYS)
     if resolver is None:
         resolver = ClaudeResolver() if os.environ.get("ANTHROPIC_API_KEY") else NullResolver()
 
@@ -88,40 +115,45 @@ def create_app(store: Store | None = None, resolver: Resolver | None = None) -> 
         return LLMS_TXT
 
     @app.post("/v1/answer")
-    def answer(body: AnswerRequest, api_key: str = Depends(require_key)):
+    def answer(
+        body: AnswerRequest,
+        api_key: str = Depends(require_key),
+        x_client: str = Header(default=""),
+        user_agent: str = Header(default=""),
+    ):
         started = time.monotonic()
         now = time.time()
         key = question_key(body.question)
         hint = body.domain if body.domain in config.DOMAIN_TTL_SECONDS else None
+        # Le serveur MCP s'annonce avec « mcp: » ; sinon, c'est un appel direct à l'API.
+        client = (x_client or user_agent)[:200] or None
+        channel = "mcp" if x_client.startswith("mcp:") else "http"
 
-        def elapsed_ms():
-            return int((time.monotonic() - started) * 1000)
+        def record(outcome, domain, *, cost_eur=0.0, version_id=None):
+            return store.log(
+                api_key=api_key,
+                key=key,
+                question=body.question,
+                domain=domain,
+                outcome=outcome,
+                latency_ms=int((time.monotonic() - started) * 1000),
+                cost_eur=cost_eur,
+                channel=channel,
+                client=client,
+                context=body.context,
+                answer_version_id=version_id,
+            )
 
         cached = store.get_fresh(key, now)
         if cached is not None:
             store.consume(api_key)
-            store.log(
-                api_key=api_key,
-                key=key,
-                question=body.question,
-                domain=cached.domain,
-                outcome="hit",
-                latency_ms=elapsed_ms(),
-            )
-            return _payload(cached, cached=True)
+            request_id = record("hit", cached.domain, version_id=cached.version_id)
+            return _payload(cached, cached=True, request_id=request_id)
 
         resolution = resolver.resolve(body.question, hint)
         if resolution.answer is None:
-            store.log(
-                api_key=api_key,
-                key=key,
-                question=body.question,
-                domain=resolution.domain,
-                outcome="unanswered",
-                latency_ms=elapsed_ms(),
-                cost_eur=resolution.cost_eur,
-            )
-            return {"status": "unanswered", "question": body.question, "cached": False}
+            request_id = record("unanswered", resolution.domain, cost_eur=resolution.cost_eur)
+            return {"status": "unanswered", "request_id": request_id, "question": body.question, "cached": False}
 
         fresh = CachedAnswer(
             key=key,
@@ -135,16 +167,23 @@ def create_app(store: Store | None = None, resolver: Resolver | None = None) -> 
         )
         store.put(fresh)
         store.consume(api_key)
-        store.log(
-            api_key=api_key,
-            key=key,
-            question=body.question,
-            domain=fresh.domain,
-            outcome="miss",
-            latency_ms=elapsed_ms(),
-            cost_eur=resolution.cost_eur,
-        )
-        return _payload(fresh, cached=False)
+        request_id = record("miss", fresh.domain, cost_eur=resolution.cost_eur, version_id=fresh.version_id)
+        return _payload(fresh, cached=False, request_id=request_id)
+
+    @app.post("/v1/feedback")
+    def feedback(body: FeedbackRequest, x_api_key: str = Header(default="")):
+        # Pas de contrôle de quota : un retour ne coûte rien et ne doit jamais être refusé pour ça.
+        if not x_api_key or store.get_key(x_api_key) is None:
+            raise HTTPException(401, "Clé d'API absente ou inconnue.")
+        if not store.add_feedback(
+            request_id=body.request_id,
+            api_key=x_api_key,
+            useful=body.useful,
+            issue=body.issue,
+            comment=body.comment,
+        ):
+            raise HTTPException(404, "Requête inconnue pour cette clé.")
+        return {"status": "recorded", "request_id": body.request_id}
 
     @app.post("/admin/keys", dependencies=[Depends(require_admin)])
     def create_key(body: KeyRequest):
@@ -162,6 +201,10 @@ def create_app(store: Store | None = None, resolver: Resolver | None = None) -> 
     def recent_requests(limit: int = Query(default=50, ge=1, le=500)):
         return store.recent_requests(limit)
 
+    @app.get("/admin/feedback", dependencies=[Depends(require_admin)])
+    def list_feedback(limit: int = Query(default=50, ge=1, le=500)):
+        return store.list_feedback(limit)
+
     @app.get("/admin/answers", dependencies=[Depends(require_admin)])
     def list_answers(limit: int = Query(default=50, ge=1, le=500)):
         return store.list_answers(limit)
@@ -175,9 +218,10 @@ def create_app(store: Store | None = None, resolver: Resolver | None = None) -> 
     return app
 
 
-def _payload(a: CachedAnswer, *, cached: bool) -> dict:
+def _payload(a: CachedAnswer, *, cached: bool, request_id: str) -> dict:
     return {
         "status": "answered",
+        "request_id": request_id,
         "question": a.question,
         "answer": a.answer,
         "domain": a.domain,

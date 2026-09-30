@@ -139,3 +139,6 @@ WEB_SEARCH_USD_PER_1000 = float(os.environ.get("WEB_SEARCH_USD_PER_1000", "10"))
 USD_TO_EUR = float(os.environ.get("USD_TO_EUR", "0.92"))
 
 MAX_QUESTION_CHARS = 500
+
+# Durée de conservation du journal des requêtes (questions, contextes, retours), en jours.
+LOG_RETENTION_DAYS = int(os.environ.get("LOG_RETENTION_DAYS", "365"))

@@ -126,3 +126,19 @@
 - **Réponse attendue de 304** : « 33 indicateurs pour les audits réalisés à partir du 1er novembre
   2026 (décret n° 2026-728 du 1er août 2026) ; 32 avant cette date. » Avec la source Légifrance,
   la date, et l'état de publication du guide de lecture.
+
+## 7. Kit MCP 2.x : lire le nom de l'agent client depuis un outil
+
+- **Date** : 30 septembre 2026
+- **Domaine** : `logiciel`
+- **Question** : « Dans le kit Python `mcp` 2.x, comment un outil lit-il le nom et la version du
+  client MCP qui l'appelle ? »
+- **Ce qui s'est passé** : en lisant le code du kit (2.2.0), Claude a trouvé
+  `ServerRequestContext.connection.client_params` et l'a utilisé. Résultat : nom toujours
+  « inconnu », parce que le contexte reçu par un outil n'a pas d'attribut `connection`
+  (l'erreur était avalée). Il a fallu écrire un outil de sonde pour lister ce que le contexte
+  contient vraiment.
+- **Source de la bonne réponse** : essai sur `mcp` 2.2.0.
+- **Réponse attendue de 304** : « `ctx.session.client_params.client_info` (champs `name` et
+  `version`), avec `ctx: Context` en paramètre de l'outil. Le client peut ne pas s'annoncer :
+  prévoir une valeur par défaut. »

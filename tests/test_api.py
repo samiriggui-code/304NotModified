@@ -133,3 +133,69 @@ def test_dashboard_data(setup):
     [key] = client.get("/admin/keys", headers=ADMIN).json()
     assert key["label"] == "test" and key["used"] == 1
     assert key["key"] == headers["X-API-Key"][:12] + "…"  # jamais la clé complète
+
+
+def test_request_id_context_and_client_are_recorded(setup):
+    client, _, headers = setup
+    body = client.post(
+        "/v1/answer",
+        json={"question": "Quelle est la réponse ?", "context": "prépare un devis"},
+        headers={**headers, "X-Client": "mon-agent/2.1"},
+    ).json()
+    assert body["request_id"].startswith("req_")
+
+    [row] = client.get("/admin/requests", headers=ADMIN).json()
+    assert row["request_id"] == body["request_id"]
+    assert (row["channel"], row["client"], row["context"]) == ("http", "mon-agent/2.1", "prépare un devis")
+    assert row["answer"] == "42"
+
+
+def test_feedback_is_recorded_only_for_own_requests(setup):
+    client, _, headers = setup
+    request_id = client.post("/v1/answer", json={"question": "Quelle est la réponse ?"}, headers=headers).json()[
+        "request_id"
+    ]
+    other = client.post("/admin/keys", json={"label": "autre"}, headers=ADMIN).json()["api_key"]
+
+    fb = {"request_id": request_id, "useful": False, "issue": "wrong", "comment": "date fausse"}
+    assert client.post("/v1/feedback", json=fb, headers={"X-API-Key": other}).status_code == 404
+    assert client.post("/v1/feedback", json=fb).status_code == 401
+    assert client.post("/v1/feedback", json=fb, headers=headers).status_code == 200
+
+    [item] = client.get("/admin/feedback", headers=ADMIN).json()
+    assert item["useful"] is False and item["issue"] == "wrong" and item["answer"] == "42"
+    # Un retour ne modifie jamais la réponse en mémoire.
+    again = client.post("/v1/answer", json={"question": "Quelle est la réponse ?"}, headers=headers).json()
+    assert again["answer"] == "42" and again["cached"] is True
+    assert client.get("/admin/stats", headers=ADMIN).json()["feedback"] == {
+        "count": 1,
+        "useful_rate": 0.0,
+        "issues": {"wrong": 1},
+    }
+
+
+def test_refreshed_answer_keeps_what_was_served_before(setup, monkeypatch):
+    client, _, headers = setup
+    monkeypatch.setitem(config.DOMAIN_TTL_SECONDS, "prix", -1)  # expire tout de suite
+    client.post("/v1/answer", json={"question": "Prix du X", "domain": "prix"}, headers=headers)
+    resolver_answer = FakeResolver.resolve
+
+    def new_answer(self, question, domain_hint):
+        r = resolver_answer(self, question, domain_hint)
+        r.answer = "43"
+        return r
+
+    monkeypatch.setattr(FakeResolver, "resolve", new_answer)
+    client.post("/v1/answer", json={"question": "Prix du X", "domain": "prix"}, headers=headers)
+
+    rows = client.get("/admin/requests", headers=ADMIN).json()
+    assert [r["answer"] for r in rows] == ["43", "42"]
+
+
+def test_old_requests_are_purged(tmp_path):
+    store = Store(str(tmp_path / "p.sqlite3"))
+    store.log(api_key="k", key="q", question="vieille", domain=None, outcome="hit", latency_ms=1)
+    store._db.execute("UPDATE requests SET ts = ts - 400 * 86400")
+    store.log(api_key="k", key="q", question="récente", domain=None, outcome="hit", latency_ms=1)
+    store.purge_older_than(365)
+    assert [r["question"] for r in store.recent_requests(10)] == ["récente"]

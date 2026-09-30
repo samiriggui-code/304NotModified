@@ -3,14 +3,13 @@
 import hmac
 import os
 import time
-from pathlib import Path
 from typing import Literal
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query
-from fastapi.responses import HTMLResponse, PlainTextResponse
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
-from . import config
+from . import admin_auth, config
 from .normalize import question_key
 from .resolver import ClaudeResolver, NullResolver, Resolver
 from .store import CachedAnswer, Store
@@ -33,6 +32,11 @@ class FeedbackRequest(BaseModel):
     useful: bool = Field(description="La réponse a-t-elle aidé l'agent à accomplir sa tâche ?")
     issue: Literal["wrong", "outdated", "incomplete", "bad_source", "other"] | None = None
     comment: str | None = Field(default=None, max_length=1000)
+
+
+class LoginRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=200)
+    password: str = Field(min_length=1, max_length=200)
 
 
 class KeyRequest(BaseModel):
@@ -82,9 +86,6 @@ Documentation OpenAPI : /docs et /openapi.json
 """
 
 
-DASHBOARD_HTML = (Path(__file__).parent / "dashboard.html").read_text(encoding="utf-8")
-
-
 def create_app(store: Store | None = None, resolver: Resolver | None = None) -> FastAPI:
     store = store or Store(config.DB_PATH)
     store.purge_older_than(config.LOG_RETENTION_DAYS)
@@ -102,10 +103,17 @@ def create_app(store: Store | None = None, resolver: Resolver | None = None) -> 
             raise HTTPException(429, "Quota épuisé pour cette clé.")
         return row["key"]
 
+    throttle = admin_auth.LoginThrottle()
+
     def require_admin(authorization: str = Header(default="")):
-        expected = f"Bearer {config.ADMIN_TOKEN}"
-        if not config.ADMIN_TOKEN or not hmac.compare_digest(authorization, expected):
+        # Jeton fixe (scripts) ou jeton de session du tableau de bord.
+        if config.ADMIN_TOKEN and hmac.compare_digest(authorization, f"Bearer {config.ADMIN_TOKEN}"):
+            return "script"
+        token = authorization.removeprefix("Bearer ")
+        email = admin_auth.read_session_token(token, config.SESSION_SECRET) if token != authorization else None
+        if email is None or email != config.ADMIN_EMAIL:
             raise HTTPException(403, "Accès administrateur requis.")
+        return email
 
     @app.get("/health")
     def health():
@@ -186,16 +194,16 @@ def create_app(store: Store | None = None, resolver: Resolver | None = None) -> 
             raise HTTPException(404, "Requête inconnue pour cette clé.")
         return {"status": "recorded", "request_id": body.request_id}
 
-    @app.post("/admin/keys", dependencies=[Depends(require_admin)])
+    @app.post("/internal/keys", dependencies=[Depends(require_admin)])
     def create_key(body: KeyRequest):
         return {"api_key": store.create_key(body.label, body.quota), "quota": body.quota}
 
-    @app.get("/admin/stats", dependencies=[Depends(require_admin)])
+    @app.get("/internal/stats", dependencies=[Depends(require_admin)])
     def stats(days: float | None = Query(default=None, gt=0, le=3650)):
         since = time.time() - days * 86400 if days else 0.0
         return store.stats(config.PRICE_PER_REQUEST_EUR, since=since)
 
-    @app.get("/admin/timeseries", dependencies=[Depends(require_admin)])
+    @app.get("/internal/timeseries", dependencies=[Depends(require_admin)])
     def timeseries(
         days: float = Query(default=7, gt=0, le=3650),
         bucket: Literal["hour", "day"] = "day",
@@ -207,27 +215,47 @@ def create_app(store: Store | None = None, resolver: Resolver | None = None) -> 
             tz_offset_seconds=tz_offset_min * 60,
         )
 
-    @app.get("/admin/keys", dependencies=[Depends(require_admin)])
+    @app.get("/internal/keys", dependencies=[Depends(require_admin)])
     def list_keys():
         return store.list_keys()
 
-    @app.get("/admin/requests", dependencies=[Depends(require_admin)])
+    @app.get("/internal/requests", dependencies=[Depends(require_admin)])
     def recent_requests(limit: int = Query(default=50, ge=1, le=500)):
         return store.recent_requests(limit)
 
-    @app.get("/admin/feedback", dependencies=[Depends(require_admin)])
+    @app.get("/internal/feedback", dependencies=[Depends(require_admin)])
     def list_feedback(limit: int = Query(default=50, ge=1, le=500)):
         return store.list_feedback(limit)
 
-    @app.get("/admin/answers", dependencies=[Depends(require_admin)])
+    @app.get("/internal/answers", dependencies=[Depends(require_admin)])
     def list_answers(limit: int = Query(default=50, ge=1, le=500)):
         return store.list_answers(limit)
 
-    # Tableau de bord : la page elle-même est publique, mais elle ne montre rien sans le jeton
-    # administrateur, qu'elle envoie à chaque appel des routes /admin/* ci-dessus.
-    @app.get("/admin", response_class=HTMLResponse, include_in_schema=False)
-    def dashboard():
-        return DASHBOARD_HTML
+    # Connexion du tableau de bord (front Next.js séparé, voir admin/). Les routes /internal/* ne sont
+    # pas exposées sur Internet : Caddy les bloque, seul le front, sur le serveur, les appelle.
+    @app.post("/internal/auth/login")
+    def login(body: LoginRequest, request: Request, x_forwarded_for: str = Header(default="")):
+        if not (config.ADMIN_EMAIL and config.ADMIN_PASSWORD_HASH and config.SESSION_SECRET):
+            raise HTTPException(503, "Connexion non configurée : ADMIN_EMAIL, ADMIN_PASSWORD_HASH, SESSION_SECRET.")
+        who = x_forwarded_for.split(",")[0].strip() or (request.client.host if request.client else "?")
+        wait = throttle.locked_for(who)
+        if wait:
+            raise HTTPException(429, f"Trop d'essais : réessayez dans {wait // 60 + 1} min.")
+        email = body.email.strip().lower()
+        password_ok = admin_auth.verify_password(body.password, config.ADMIN_PASSWORD_HASH)
+        if not (password_ok and hmac.compare_digest(email, config.ADMIN_EMAIL)):
+            throttle.failure(who)
+            raise HTTPException(401, "E-mail ou mot de passe incorrect.")
+        throttle.success(who)
+        return {
+            "access_token": admin_auth.make_session_token(email, config.SESSION_SECRET),
+            "expires_in": admin_auth.SESSION_TTL_SECONDS,
+            "user": {"email": email},
+        }
+
+    @app.get("/internal/auth/me")
+    def me(who: str = Depends(require_admin)):
+        return {"email": who}
 
     return app
 

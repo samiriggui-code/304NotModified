@@ -121,7 +121,13 @@ DOMAIN_GUIDANCE = {
 }
 
 DB_PATH = os.environ.get("NM304_DB", "304notmodified.sqlite3")
+# Accès administrateur. ADMIN_TOKEN : jeton fixe pour les scripts (facultatif).
+# Tableau de bord : ADMIN_EMAIL + ADMIN_PASSWORD_HASH (python -m app.cli hash-password) ;
+# SESSION_SECRET signe les jetons de session (le changer déconnecte tout le monde).
 ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN", "")
+ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "").strip().lower()
+ADMIN_PASSWORD_HASH = os.environ.get("ADMIN_PASSWORD_HASH", "")
+SESSION_SECRET = os.environ.get("SESSION_SECRET", "")
 
 # Quota gratuit par clé (requêtes). Les questions restées sans réponse ne sont pas décomptées.
 FREE_QUOTA = int(os.environ.get("FREE_QUOTA", "1000"))

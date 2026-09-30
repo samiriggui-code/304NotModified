@@ -31,7 +31,7 @@ def setup(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "ADMIN_TOKEN", "test-admin")
     resolver = FakeResolver()
     client = TestClient(create_app(Store(str(tmp_path / "t.sqlite3")), resolver))
-    key = client.post("/admin/keys", json={"label": "test", "quota": 3}, headers=ADMIN).json()["api_key"]
+    key = client.post("/internal/keys", json={"label": "test", "quota": 3}, headers=ADMIN).json()["api_key"]
     return client, resolver, {"X-API-Key": key}
 
 
@@ -63,7 +63,7 @@ def test_unanswered_is_logged_and_not_counted(setup):
         body = client.post("/v1/answer", json={"question": "question inconnu"}, headers=headers).json()
         assert body["status"] == "unanswered"
 
-    stats = client.get("/admin/stats", headers=ADMIN).json()
+    stats = client.get("/internal/stats", headers=ADMIN).json()
     assert stats["outcomes"] == {"unanswered": 5}
     assert stats["top_unanswered_questions"][0]["requests"] == 5
     # Quota de 3 non entamé : une vraie question passe encore.
@@ -80,15 +80,15 @@ def test_quota_and_auth(setup):
 
 def test_admin_requires_token(setup):
     client, _, _ = setup
-    assert client.get("/admin/stats").status_code == 403
-    assert client.get("/admin/stats", headers={"Authorization": "Bearer faux"}).status_code == 403
+    assert client.get("/internal/stats").status_code == 403
+    assert client.get("/internal/stats", headers={"Authorization": "Bearer faux"}).status_code == 403
 
 
 def test_stats_measure_repeat_rate_and_margin(setup):
     client, _, headers = setup
     for _ in range(3):
         client.post("/v1/answer", json={"question": "Même question"}, headers=headers)
-    stats = client.get("/admin/stats", headers=ADMIN).json()
+    stats = client.get("/internal/stats", headers=ADMIN).json()
 
     assert stats["requests"] == 3
     assert stats["distinct_questions"] == 1
@@ -101,7 +101,7 @@ def test_stats_measure_repeat_rate_and_margin(setup):
 def test_null_resolver_measures_demand(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "ADMIN_TOKEN", "test-admin")
     client = TestClient(create_app(Store(str(tmp_path / "n.sqlite3")), NullResolver()))
-    key = client.post("/admin/keys", json={"label": "n"}, headers=ADMIN).json()["api_key"]
+    key = client.post("/internal/keys", json={"label": "n"}, headers=ADMIN).json()["api_key"]
     body = client.post("/v1/answer", json={"question": "Bonjour ?"}, headers={"X-API-Key": key}).json()
     assert body["status"] == "unanswered"
 
@@ -113,8 +113,8 @@ def test_llms_txt(setup):
 
 def test_dashboard_data_requires_admin(setup):
     client, _, _ = setup
-    assert client.get("/admin").status_code == 200  # la page, vide sans jeton
-    for path in ("/admin/keys", "/admin/requests", "/admin/answers"):
+    assert client.get("/admin").status_code == 404  # le tableau de bord est une application à part (admin/)
+    for path in ("/internal/keys", "/internal/requests", "/internal/answers"):
         assert client.get(path).status_code == 403
 
 
@@ -123,14 +123,14 @@ def test_dashboard_data(setup):
     client.post("/v1/answer", json={"question": "Quelle est la réponse ?"}, headers=headers)
     client.post("/v1/answer", json={"question": "question inconnu"}, headers=headers)
 
-    requests = client.get("/admin/requests", headers=ADMIN).json()
+    requests = client.get("/internal/requests", headers=ADMIN).json()
     assert [r["outcome"] for r in requests] == ["unanswered", "miss"]
     assert requests[0]["key_label"] == "test"
 
-    [answer] = client.get("/admin/answers", headers=ADMIN).json()
+    [answer] = client.get("/internal/answers", headers=ADMIN).json()
     assert answer["answer"] == "42" and answer["sources"][0]["url"] == "https://exemple.org/source"
 
-    [key] = client.get("/admin/keys", headers=ADMIN).json()
+    [key] = client.get("/internal/keys", headers=ADMIN).json()
     assert key["label"] == "test" and key["used"] == 1
     assert key["key"] == headers["X-API-Key"][:12] + "…"  # jamais la clé complète
 
@@ -144,7 +144,7 @@ def test_request_id_context_and_client_are_recorded(setup):
     ).json()
     assert body["request_id"].startswith("req_")
 
-    [row] = client.get("/admin/requests", headers=ADMIN).json()
+    [row] = client.get("/internal/requests", headers=ADMIN).json()
     assert row["request_id"] == body["request_id"]
     assert (row["channel"], row["client"], row["context"]) == ("http", "mon-agent/2.1", "prépare un devis")
     assert row["answer"] == "42"
@@ -155,19 +155,19 @@ def test_feedback_is_recorded_only_for_own_requests(setup):
     request_id = client.post("/v1/answer", json={"question": "Quelle est la réponse ?"}, headers=headers).json()[
         "request_id"
     ]
-    other = client.post("/admin/keys", json={"label": "autre"}, headers=ADMIN).json()["api_key"]
+    other = client.post("/internal/keys", json={"label": "autre"}, headers=ADMIN).json()["api_key"]
 
     fb = {"request_id": request_id, "useful": False, "issue": "wrong", "comment": "date fausse"}
     assert client.post("/v1/feedback", json=fb, headers={"X-API-Key": other}).status_code == 404
     assert client.post("/v1/feedback", json=fb).status_code == 401
     assert client.post("/v1/feedback", json=fb, headers=headers).status_code == 200
 
-    [item] = client.get("/admin/feedback", headers=ADMIN).json()
+    [item] = client.get("/internal/feedback", headers=ADMIN).json()
     assert item["useful"] is False and item["issue"] == "wrong" and item["answer"] == "42"
     # Un retour ne modifie jamais la réponse en mémoire.
     again = client.post("/v1/answer", json={"question": "Quelle est la réponse ?"}, headers=headers).json()
     assert again["answer"] == "42" and again["cached"] is True
-    assert client.get("/admin/stats", headers=ADMIN).json()["feedback"] == {
+    assert client.get("/internal/stats", headers=ADMIN).json()["feedback"] == {
         "count": 1,
         "useful_rate": 0.0,
         "issues": {"wrong": 1},
@@ -188,7 +188,7 @@ def test_refreshed_answer_keeps_what_was_served_before(setup, monkeypatch):
     monkeypatch.setattr(FakeResolver, "resolve", new_answer)
     client.post("/v1/answer", json={"question": "Prix du X", "domain": "prix"}, headers=headers)
 
-    rows = client.get("/admin/requests", headers=ADMIN).json()
+    rows = client.get("/internal/requests", headers=ADMIN).json()
     assert [r["answer"] for r in rows] == ["43", "42"]
 
 
@@ -209,12 +209,12 @@ def test_timeseries_and_period_filter(setup):
     store._db.execute("UPDATE requests SET ts = ts - 3 * 86400 WHERE outcome = 'unanswered'")
     store._db.commit()
 
-    week = client.get("/admin/timeseries?days=7&bucket=day", headers=ADMIN).json()
+    week = client.get("/internal/timeseries?days=7&bucket=day", headers=ADMIN).json()
     assert sum(b["hit"] + b["miss"] + b["unanswered"] for b in week) == 3
     assert len(week) == 2  # deux jours différents
-    today = client.get("/admin/timeseries?days=1&bucket=hour", headers=ADMIN).json()
+    today = client.get("/internal/timeseries?days=1&bucket=hour", headers=ADMIN).json()
     assert sum(b["hit"] + b["miss"] for b in today) == 2 and all(b["unanswered"] == 0 for b in today)
 
-    assert client.get("/admin/stats?days=1", headers=ADMIN).json()["requests"] == 2
-    assert client.get("/admin/stats", headers=ADMIN).json()["requests"] == 3
-    assert client.get("/admin/timeseries").status_code == 403
+    assert client.get("/internal/stats?days=1", headers=ADMIN).json()["requests"] == 2
+    assert client.get("/internal/stats", headers=ADMIN).json()["requests"] == 3
+    assert client.get("/internal/timeseries").status_code == 403

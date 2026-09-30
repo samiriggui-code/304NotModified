@@ -16,7 +16,7 @@ def api(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "ADMIN_TOKEN", "test-admin")
     resolver = FakeResolver()
     http = TestClient(create_app(Store(str(tmp_path / "m.sqlite3")), resolver))
-    key = http.post("/admin/keys", json={"label": "mcp", "quota": 2}, headers=ADMIN).json()["api_key"]
+    key = http.post("/internal/keys", json={"label": "mcp", "quota": 2}, headers=ADMIN).json()["api_key"]
     return http, resolver, key
 
 
@@ -82,7 +82,7 @@ def test_mcp_request_is_recorded_with_client_context_and_feedback(api):
     fb = call(server, "feedback", {"request_id": request_id, "useful": False, "issue": "outdated"})
     assert not fb.is_error and fb.structured_content["status"] == "recorded"
 
-    [row] = http.get("/admin/requests", headers=ADMIN).json()
+    [row] = http.get("/internal/requests", headers=ADMIN).json()
     assert row["channel"] == "mcp" and row["client"] == "mcp:mcp/0.1.0"  # nom annoncé par le client de test
     assert row["context"] == "rédige une facture"
     assert row["answer"] == "42"

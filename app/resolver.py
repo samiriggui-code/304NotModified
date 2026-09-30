@@ -185,6 +185,26 @@ class OpenRouterResolver:
         return _resolution_from_text(message.get("content") or "", citations, domain_hint, cost)
 
 
+class FallbackResolver:
+    """Premier moteur, puis le suivant si le premier refuse ou tombe en panne (crédit épuisé, limite,
+    erreur du fournisseur) : rien n'a été produit ni facturé, la question part chez le suivant.
+
+    Un dépassement de délai n'est pas relayé : le temps d'attente de l'agent est déjà consommé
+    (le client MCP abandonne à 120 s), une seconde recherche le ferait attendre pour rien.
+    """
+
+    def __init__(self, *resolvers: Resolver):
+        self.resolvers = resolvers
+
+    def resolve(self, question: str, domain_hint: str | None) -> Resolution:
+        for resolver in self.resolvers[:-1]:
+            try:
+                return resolver.resolve(question, domain_hint)
+            except ProviderError:
+                continue
+        return self.resolvers[-1].resolve(question, domain_hint)
+
+
 def _resolution_from_text(text: str, citations: list[dict], domain_hint: str | None, cost: float) -> Resolution:
     """Règles communes à tous les moteurs : JSON final, domaine connu, au moins une source vérifiable."""
     parsed = _parse_final_json(text)

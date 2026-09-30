@@ -367,7 +367,7 @@ def test_openrouter_timeout_is_classified():
 
 def test_default_resolver_prefers_anthropic_then_openrouter(monkeypatch):
     from app.main import default_resolver
-    from app.resolver import OpenRouterResolver
+    from app.resolver import FallbackResolver, OpenRouterResolver
 
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
@@ -375,4 +375,6 @@ def test_default_resolver_prefers_anthropic_then_openrouter(monkeypatch):
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-x")
     assert isinstance(default_resolver(), OpenRouterResolver)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-x")
-    assert isinstance(default_resolver(), ClaudeResolver)
+    # Les deux clés : Anthropic d'abord, OpenRouter en relais s'il refuse (voir tests/test_fallback.py).
+    both = default_resolver()
+    assert isinstance(both, FallbackResolver) and isinstance(both.resolvers[0], ClaudeResolver)

@@ -18,7 +18,15 @@ from .aliases import CONTEXT_ALIASES, DOMAIN_ALIASES, QUESTION_ALIASES
 from .engine import SearchCoordinator
 from .normalize import question_key
 from .public import home_page, llms_text
-from .resolver import REASONS, TRANSIENT_REASONS, ClaudeResolver, NullResolver, OpenRouterResolver, Resolver
+from .resolver import (
+    REASONS,
+    TRANSIENT_REASONS,
+    ClaudeResolver,
+    FallbackResolver,
+    NullResolver,
+    OpenRouterResolver,
+    Resolver,
+)
 from .store import CachedAnswer, Store
 
 log = logging.getLogger("304notmodified")
@@ -125,13 +133,16 @@ class DailyCounter:
 
 
 def default_resolver() -> Resolver:
-    """Moteur de recherche selon les clés présentes : Anthropic d'abord, OpenRouter en secours,
-    sinon aucun (les questions sont seulement enregistrées)."""
+    """Moteur de recherche selon les clés présentes : Anthropic d'abord, OpenRouter en secours (y compris
+    quand Anthropic refuse, par exemple crédit épuisé), sinon aucun (les questions sont seulement enregistrées)."""
+    engines: list[Resolver] = []
     if os.environ.get("ANTHROPIC_API_KEY"):
-        return ClaudeResolver()
+        engines.append(ClaudeResolver())
     if os.environ.get("OPENROUTER_API_KEY"):
-        return OpenRouterResolver(os.environ["OPENROUTER_API_KEY"])
-    return NullResolver()
+        engines.append(OpenRouterResolver(os.environ["OPENROUTER_API_KEY"]))
+    if not engines:
+        return NullResolver()
+    return engines[0] if len(engines) == 1 else FallbackResolver(*engines)
 
 
 def create_app(store: Store | None = None, resolver: Resolver | None = None) -> FastAPI:

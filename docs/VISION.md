@@ -27,6 +27,26 @@ extrait la même réponse, puis recommence le lendemain.
 C'est lent (plusieurs secondes par recherche) et coûteux (recherche web plus traitement par l'IA),
 et le travail est refait inutilement des milliers de fois.
 
+### Un cas réel, vécu en construisant ce projet (30 septembre 2026)
+
+En écrivant le serveur MCP de 304NotModified, Claude devait utiliser le kit officiel MCP pour Python.
+Sa mémoire indiquait une façon de faire (`FastMCP`), mais le kit était passé en version 2.2.0 et
+cette classe avait été renommée (`MCPServer`), avec d'autres changements.
+
+- Sans vérification, le code écrit de mémoire ne fonctionnait pas du tout.
+- Avec vérification, il a fallu installer le kit, lire l'erreur, fouiller son code, puis corriger
+  deux essais ratés supplémentaires (format de réponse) avant d'arriver au bon résultat.
+- Au même moment, d'autres agents font très probablement la même recherche, chacun de son côté.
+
+Avec 304NotModified, une seule question (« comment créer un serveur MCP avec la dernière version
+du kit Python ? ») aurait suffi : réponse immédiate, avec la page de migration officielle comme
+source et une date.
+
+**Ce que ça montre** : la mémoire d'un agent date de son entraînement, alors que les logiciels
+changent chaque mois. Tous les agents qui écrivent du code ont ce problème. C'est un argument fort
+pour choisir le domaine `logiciel` (versions, API, changements de nom) comme premier domaine, et un
+exemple concret à montrer aux premiers développeurs.
+
 ---
 
 ## 3. L'idée
@@ -241,7 +261,7 @@ Une seule intégration peut produire des centaines de milliers d'appels par mois
 
 ## 12. Questions ouvertes
 
-- Quel premier domaine ?
+- Quel premier domaine ? (Le cas réel du §2 plaide pour `logiciel`.)
 - Quel prix par requête, et une offre « réponse garantie » plus chère ?
 - Comment trouver les 10 premiers agents ou développeurs utilisateurs ?
 - À partir de quel volume passer de SQLite à une base plus robuste ?

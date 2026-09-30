@@ -76,7 +76,9 @@ if ! node_ok; then
   rm -f "/tmp/$NODE_FILE"
   for bin in node npm npx; do ln -sf "$NODE_DIR/bin/$bin" "/usr/local/bin/$bin"; done
 fi
-echo "   Node.js $(node --version)"
+# Node déjà présent (ex. /usr/bin/node) ou installé ci-dessus : le service utilise celui-là.
+NODE_BIN="$(readlink -f "$(command -v node)")"
+echo "   Node.js $(node --version) ($NODE_BIN)"
 
 say "3/10 Le nom de domaine pointe-t-il bien sur ce serveur ?"
 SERVER_IP="$(curl -4 -fsS --max-time 10 https://api.ipify.org || true)"
@@ -216,7 +218,7 @@ User=$APP_USER
 Group=$APP_USER
 WorkingDirectory=$APP_DIR/admin/.next/standalone
 Environment=NODE_ENV=production PORT=3304 HOSTNAME=$BIND_IP API_URL=http://$BIND_IP:8304 NEXT_TELEMETRY_DISABLED=1
-ExecStart=$NODE_DIR/bin/node server.js
+ExecStart=$NODE_BIN server.js
 Restart=always
 RestartSec=3
 NoNewPrivileges=true

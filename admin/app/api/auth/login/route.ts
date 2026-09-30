@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        // Adresse du visiteur (transmise par Caddy) : l'API limite les essais par adresse.
+        // Adresse du visiteur (transmise par Traefik) : l'API limite les essais par adresse.
         'X-Forwarded-For': request.headers.get('x-forwarded-for') ?? '',
       },
       body: JSON.stringify({ email, password }),

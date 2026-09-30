@@ -1,6 +1,7 @@
 # 304NotModified : consignes pour Claude
 
-Lire `docs/VISION.md` en premier : l'idée, le marché, le modèle économique, les principes et la feuille de route.
+Lire `HANDOFF.md` en premier (état du projet, démarrage local, déploiement), puis `docs/VISION.md` :
+l'idée, le marché, le modèle économique, les principes et la feuille de route.
 
 ## Le propriétaire
 
@@ -46,4 +47,12 @@ cd admin && npm run typecheck && npm run lint && NEXT_PUBLIC_BASE_PATH=/admin np
 - `app/` + `mcp_server/` : le service pour les agents (API publique `/v1`, `/llms.txt`, MCP).
 - `admin/` : le tableau de bord du propriétaire, application Next.js séparée (socle Metronic,
   licence du propriétaire), servie sous `/admin`. Elle ne parle qu'aux routes `/internal/*` de l'API,
-  bloquées depuis Internet par Caddy. Ne jamais exposer `/internal` ni y mettre une route pour les agents.
+  jamais routées par Traefik. Ne jamais exposer `/internal` ni y mettre une route pour les agents.
+
+## Serveur (VPS) : Traefik, jamais Caddy
+
+Le VPS du propriétaire fait tourner **Traefik 3.3 dans Docker** (fournisseur « file », entrée
+`websecure`, certificats Let's Encrypt, projet `gsms-deploy`). **N'installer ni Caddy, ni nginx, ni un
+second Traefik.** 304NotModified s'y branche en déposant un fichier de routes dans le dossier dynamique
+de Traefik (voir `deploy/install.sh`), et ses services écoutent sur la passerelle du réseau Docker de
+Traefik. En cas de doute sur le serveur, demander au propriétaire avant de supposer.

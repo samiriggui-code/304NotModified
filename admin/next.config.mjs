@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Le tableau de bord est servi sous https://304notmodified.com/admin (Caddy : /admin* → Next).
+  // Le tableau de bord est servi sous https://304notmodified.com/admin (Traefik : /admin → Next).
   // Lu au moment du build : NEXT_PUBLIC_BASE_PATH=/admin npm run build
   basePath: process.env.NEXT_PUBLIC_BASE_PATH || '',
 

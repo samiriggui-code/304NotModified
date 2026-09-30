@@ -232,7 +232,7 @@ def create_app(store: Store | None = None, resolver: Resolver | None = None) -> 
         return store.list_answers(limit)
 
     # Connexion du tableau de bord (front Next.js séparé, voir admin/). Les routes /internal/* ne sont
-    # pas exposées sur Internet : Caddy les bloque, seul le front, sur le serveur, les appelle.
+    # pas exposées sur Internet : Traefik ne les route pas, seul le front, sur le serveur, les appelle.
     @app.post("/internal/auth/login", include_in_schema=False)
     def login(body: LoginRequest, request: Request, x_forwarded_for: str = Header(default="")):
         if not (config.ADMIN_EMAIL and config.ADMIN_PASSWORD_HASH and config.SESSION_SECRET):

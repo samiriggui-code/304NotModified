@@ -1,17 +1,21 @@
 #!/usr/bin/env bash
-# Installe (ou réinstalle) 304NotModified sur un VPS Debian/Ubuntu, avec HTTPS automatique.
+# Installe (ou réinstalle) 304NotModified sur le VPS (Debian/Ubuntu), derrière le Traefik existant.
 #
 # Utilisation, en root sur le VPS :
 #     bash install.sh 304notmodified.com vous@exemple.fr
 #
-# Deux services :
-#   - 304notmodified        l'API et le MCP pour les agents (Python, port local 8304)
-#   - 304notmodified-admin  le tableau de bord du propriétaire (Next.js, port local 3304), sous /admin
-# Caddy sert les deux en HTTPS et bloque /internal/* (réservé au tableau de bord, sur le serveur).
+# Deux services (systemd, sur la machine) :
+#   - 304notmodified        l'API et le MCP pour les agents (Python, port 8304)
+#   - 304notmodified-admin  le tableau de bord du propriétaire (Next.js, port 3304), sous /admin
+# Le HTTPS est assuré par le Traefik DÉJÀ EN PLACE sur le VPS (conteneur Docker, fournisseur
+# « file ») : le script y dépose un fichier de routes 304notmodified.yaml. Il n'installe ni Caddy,
+# ni nginx, ni un autre Traefik. /internal/* n'est jamais routé (réservé au tableau de bord).
 #
-# Le script peut être relancé sans risque : il ne refait que ce qui manque.
-# Il ne touche pas au pare-feu s'il est inactif, et ne remplace jamais une configuration Caddy
-# qu'il n'a pas écrite lui-même.
+# Les services écoutent sur la passerelle du réseau Docker de Traefik (ex. 172.18.0.1) : Traefik,
+# dans son conteneur, peut les joindre ; Internet non.
+#
+# Le script peut être relancé sans risque : il ne refait que ce qui manque. Il ne remplace jamais
+# un fichier de routes Traefik qu'il n'a pas écrit lui-même.
 set -euo pipefail
 
 DOMAIN="${1:-}"
@@ -45,12 +49,9 @@ env_set() {
   rm -f "$tmp"
 }
 
-say "1/10 Logiciels nécessaires (Python, git, Caddy pour le HTTPS)"
+say "1/10 Logiciels nécessaires (Python, git)"
 apt-get update -qq
-apt-get install -y -qq python3 python3-venv git curl openssl dnsutils ca-certificates xz-utils >/dev/null
-if ! command -v caddy >/dev/null; then
-  apt-get install -y -qq caddy >/dev/null || stop "Caddy introuvable dans les paquets de ce système. Voir https://caddyserver.com/docs/install"
-fi
+apt-get install -y -qq python3 python3-venv git curl openssl dnsutils ca-certificates xz-utils iproute2 >/dev/null
 python3 -c 'import sys; sys.exit(sys.version_info < (3, 10))' || stop "Python 3.10 ou plus récent est nécessaire."
 
 say "2/10 Node.js 22 pour le tableau de bord"
@@ -85,11 +86,26 @@ if [ -z "$DOMAIN_IP" ] || { [ -n "$SERVER_IP" ] && [ "$DOMAIN_IP" != "$SERVER_IP
   stop "$DOMAIN ne pointe pas (encore) vers ce serveur. Vérifiez l'enregistrement A chez votre registrar ; la propagation peut prendre jusqu'à quelques heures."
 fi
 
-say "4/10 Ports 80 et 443 libres pour Caddy ?"
-if ss -ltnp 2>/dev/null | grep -E ':(80|443)\s' | grep -vq caddy; then
-  ss -ltnp | grep -E ':(80|443)\s' || true
-  stop "un autre programme (nginx, apache…) occupe déjà le port 80 ou 443. Il faut l'arrêter ou l'adapter : demandez de l'aide avant de continuer."
-fi
+say "4/10 Traefik déjà en place ?"
+command -v docker >/dev/null || stop "Docker introuvable : ce script s'appuie sur le Traefik (Docker) déjà installé sur le VPS."
+TRAEFIK_CT="$(docker ps --format '{{.Names}} {{.Image}}' | awk '$2 ~ /(^|\/)traefik(:|$)/ {print $1; exit}')"
+[ -n "$TRAEFIK_CT" ] || stop "aucun conteneur Traefik en marche (docker ps). Démarrez-le d'abord."
+TRAEFIK_ARGS="$(docker inspect -f '{{join .Args "\n"}}' "$TRAEFIK_CT")"
+# Dossier des routes dynamiques : sur le VPS, la source du montage lu par le fournisseur « file ».
+DYN_TARGET="$(echo "$TRAEFIK_ARGS" | sed -n 's/^--providers\.file\.directory=//p' | head -n1)"
+[ -n "$DYN_TARGET" ] || stop "Traefik n'utilise pas le fournisseur « file » (--providers.file.directory) : routes à ajouter à la main."
+DYN_DIR="$(docker inspect -f "{{range .Mounts}}{{if eq .Destination \"$DYN_TARGET\"}}{{.Source}}{{end}}{{end}}" "$TRAEFIK_CT")"
+{ [ -n "$DYN_DIR" ] && [ -d "$DYN_DIR" ]; } || stop "dossier des routes Traefik introuvable sur le VPS (montage de $DYN_TARGET)."
+CERT_RESOLVER="$(echo "$TRAEFIK_ARGS" | sed -n 's/^--certificatesresolvers\.\([^.]*\)\..*/\1/p' | head -n1)"
+[ -n "$CERT_RESOLVER" ] || stop "aucun certificatesresolver dans la configuration de Traefik."
+echo "$TRAEFIK_ARGS" | grep -q '^--entrypoints\.websecure\.address=' || stop "Traefik n'a pas d'entrée « websecure »."
+# Passerelle du réseau Docker de Traefik : adresse d'écoute des deux services.
+TRAEFIK_NET="$(docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' "$TRAEFIK_CT" | awk '{print $1}')"
+BIND_IP="$(docker network inspect -f '{{range .IPAM.Config}}{{.Gateway}} {{end}}' "$TRAEFIK_NET" | awk '{print $1}')"
+[ -n "$BIND_IP" ] || stop "passerelle du réseau Docker « $TRAEFIK_NET » introuvable."
+BRIDGE_IF="$(ip -4 -o addr show | awk -v ip="$BIND_IP" 'index($4, ip "/") == 1 {print $2; exit}')"
+echo "   Conteneur : $TRAEFIK_CT ; routes : $DYN_DIR ; certificat : $CERT_RESOLVER"
+echo "   Réseau : $TRAEFIK_NET (interface ${BRIDGE_IF:-?}) ; les services écouteront sur $BIND_IP"
 
 say "5/10 Utilisateur système, dossiers et mémoire"
 id "$APP_USER" >/dev/null 2>&1 || useradd --system --create-home --shell /usr/sbin/nologin "$APP_USER"
@@ -161,7 +177,8 @@ cat > /etc/systemd/system/304notmodified.service <<EOF
 $MARKER
 [Unit]
 Description=304NotModified (API et MCP pour les agents)
-After=network-online.target
+# Écoute sur la passerelle du réseau Docker de Traefik : attendre Docker.
+After=network-online.target docker.service
 Wants=network-online.target
 
 [Service]
@@ -169,7 +186,7 @@ User=$APP_USER
 Group=$APP_USER
 WorkingDirectory=$APP_DIR
 EnvironmentFile=$ENV_FILE
-ExecStart=$APP_DIR/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8304 --proxy-headers
+ExecStart=$APP_DIR/.venv/bin/uvicorn app.main:app --host $BIND_IP --port 8304
 Restart=always
 RestartSec=3
 NoNewPrivileges=true
@@ -185,14 +202,14 @@ cat > /etc/systemd/system/304notmodified-admin.service <<EOF
 $MARKER
 [Unit]
 Description=304NotModified (tableau de bord du propriétaire)
-After=network-online.target 304notmodified.service
+After=network-online.target docker.service 304notmodified.service
 Wants=network-online.target
 
 [Service]
 User=$APP_USER
 Group=$APP_USER
 WorkingDirectory=$APP_DIR/admin/.next/standalone
-Environment=NODE_ENV=production PORT=3304 HOSTNAME=127.0.0.1 API_URL=http://127.0.0.1:8304 NEXT_TELEMETRY_DISABLED=1
+Environment=NODE_ENV=production PORT=3304 HOSTNAME=$BIND_IP API_URL=http://$BIND_IP:8304 NEXT_TELEMETRY_DISABLED=1
 ExecStart=$NODE_DIR/bin/node server.js
 Restart=always
 RestartSec=3
@@ -209,60 +226,100 @@ systemctl daemon-reload
 systemctl enable -q 304notmodified 304notmodified-admin
 systemctl restart 304notmodified 304notmodified-admin
 
-say "10/10 HTTPS avec Caddy"
-CADDYFILE=/etc/caddy/Caddyfile
-# On n'écrase que le fichier d'exemple livré avec Caddy, ou celui écrit par ce script.
-if [ -f "$CADDYFILE" ] && ! grep -q "$MARKER" "$CADDYFILE" \
-  && ! grep -q "The Caddyfile is an easy way to configure your Caddy web server" "$CADDYFILE"; then
-  stop "$CADDYFILE contient déjà une configuration personnalisée : je ne l'écrase pas. Demandez de l'aide pour fusionner."
+say "10/10 Routes HTTPS dans le Traefik existant"
+ROUTES="$DYN_DIR/304notmodified.yaml"
+# On ne remplace que le fichier écrit par ce script.
+if [ -f "$ROUTES" ] && ! grep -q "$MARKER" "$ROUTES"; then
+  stop "$ROUTES existe déjà et n'a pas été écrit par ce script : je ne l'écrase pas."
 fi
-cat > "$CADDYFILE" <<EOF
-$MARKER
-$DOMAIN {
-	encode gzip
-
-	# Routes internes : réservées au tableau de bord, qui les appelle sur le serveur. Jamais depuis Internet.
-	handle /internal* {
-		respond 404
-	}
-
-	# Tableau de bord du propriétaire.
-	handle /admin* {
-		reverse_proxy 127.0.0.1:3304
-	}
-
-	# API et MCP pour les agents.
-	handle {
-		reverse_proxy 127.0.0.1:8304
-	}
+# Modèle écrit tel quel (aucune substitution du shell), puis les jetons __…__ sont remplacés.
+read -r -d '' ROUTES_TPL <<'YAML' || true
+__MARKER__
+# API et MCP pour les agents : tout le domaine, sauf /admin (tableau de bord) et /internal (jamais routé).
+# Tableau de bord du propriétaire : /admin. Les deux services tournent sur la machine, pas en conteneur.
+http:
+  routers:
+    nm304-api:
+      rule: "Host(`__DOMAIN__`) && !PathPrefix(`/internal`) && !PathPrefix(`/admin`)"
+      entryPoints: [websecure]
+      service: nm304-api
+      tls:
+        certResolver: __RESOLVER__
+    nm304-admin:
+      rule: "Host(`__DOMAIN__`) && PathPrefix(`/admin`)"
+      entryPoints: [websecure]
+      service: nm304-admin
+      tls:
+        certResolver: __RESOLVER__
+  services:
+    nm304-api:
+      loadBalancer:
+        servers:
+          - url: "http://__BIND__:8304"
+    nm304-admin:
+      loadBalancer:
+        servers:
+          - url: "http://__BIND__:3304"
+YAML
+# Redirection de www.<domaine> vers le domaine, seulement si www pointe déjà sur le VPS
+# (sinon Let's Encrypt échouerait en boucle sur www).
+read -r -d '' WWW_TPL <<'YAML' || true
+# www.__DOMAIN__ → https://__DOMAIN__
+http:
+  routers:
+    nm304-www:
+      rule: "Host(`www.__DOMAIN__`)"
+      entryPoints: [websecure]
+      middlewares: [nm304-www-redirect]
+      service: nm304-api
+      tls:
+        certResolver: __RESOLVER__
+  middlewares:
+    nm304-www-redirect:
+      redirectRegex:
+        regex: "^https?://www\\.[^/]+/(.*)"
+        replacement: "https://__DOMAIN__/${1}"
+        permanent: true
+YAML
+render() {
+  local out="$1"
+  out="${out//__MARKER__/$MARKER}"
+  out="${out//__DOMAIN__/$DOMAIN}"
+  out="${out//__RESOLVER__/$CERT_RESOLVER}"
+  printf '%s\n' "${out//__BIND__/$BIND_IP}"
 }
+render "$ROUTES_TPL" > "$ROUTES"
+WWW_ROUTES="$DYN_DIR/304notmodified-www.yaml"
+if [ -n "$(dig +short A "www.$DOMAIN" | tail -n1)" ]; then
+  { echo "$MARKER"; render "$WWW_TPL"; } > "$WWW_ROUTES"
+elif [ -f "$WWW_ROUTES" ] && grep -q "$MARKER" "$WWW_ROUTES"; then
+  rm -f "$WWW_ROUTES"
+fi
+# Le fournisseur « file » surveille le dossier ; le signal HUP force la relecture au besoin.
+docker kill -s HUP "$TRAEFIK_CT" >/dev/null 2>&1 || true
 
-www.$DOMAIN {
-	redir https://$DOMAIN{uri} permanent
-}
-EOF
-caddy validate --config "$CADDYFILE" --adapter caddyfile >/dev/null
-systemctl enable -q caddy
-systemctl reload caddy 2>/dev/null || systemctl restart caddy
-
-if command -v ufw >/dev/null && ufw status | grep -q "Status: active"; then
-  ufw allow OpenSSH >/dev/null; ufw allow 80/tcp >/dev/null; ufw allow 443/tcp >/dev/null
-  echo "   Pare-feu : ports SSH, 80 et 443 ouverts."
+# Pare-feu : laisser Traefik (réseau Docker) joindre les deux services ; rien n'est ouvert vers Internet.
+if command -v ufw >/dev/null && ufw status | grep -q "Status: active" && [ -n "$BRIDGE_IF" ]; then
+  ufw allow in on "$BRIDGE_IF" to "$BIND_IP" port 8304 proto tcp >/dev/null
+  ufw allow in on "$BRIDGE_IF" to "$BIND_IP" port 3304 proto tcp >/dev/null
+  echo "   Pare-feu : ports 8304 et 3304 ouverts au seul réseau Docker $TRAEFIK_NET."
 fi
 
 say "Vérification"
-for _ in $(seq 1 30); do
+for _ in $(seq 1 45); do
   curl -fsS --max-time 5 "https://$DOMAIN/health" >/dev/null 2>&1 && break
   sleep 2
 done
-check() { printf '   %-40s %s\n' "$1" "$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$2")"; }
+check() { printf '   %-44s %s\n' "$1" "$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$2")"; }
 check "API (attendu 200)" "https://$DOMAIN/health"
 check "Tableau de bord (attendu 200)" "https://$DOMAIN/admin/signin"
 check "Routes internes bloquées (attendu 404)" "https://$DOMAIN/internal/stats"
+check "API non joignable en direct (attendu 000)" "http://${SERVER_IP:-127.0.0.1}:8304/health"
 echo
 echo "   API pour les agents : https://$DOMAIN  (documentation : https://$DOMAIN/docs)"
 echo "   Tableau de bord     : https://$DOMAIN/admin"
-echo "   En cas de souci     : journalctl -u 304notmodified -u 304notmodified-admin -u caddy -n 80"
+echo "   Routes Traefik      : $ROUTES"
+echo "   En cas de souci     : journalctl -u 304notmodified -u 304notmodified-admin -n 80 ; docker logs --tail 80 $TRAEFIK_CT"
 
 if [ -n "$NEW_PASSWORD" ]; then
   cat <<EOF

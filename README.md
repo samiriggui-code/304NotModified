@@ -90,7 +90,7 @@ Réservé au propriétaire : connexion par e-mail et mot de passe, construit sur
 
 Le navigateur ne parle qu'au serveur du tableau de bord, qui garde la session dans un cookie
 `httpOnly` et relaie vers les routes `/internal/*` de l'API. Ces routes ne sont pas exposées sur
-Internet (Caddy les bloque) et n'apparaissent pas dans `/docs`. Le texte venant du web est affiché
+Internet (Traefik ne les route pas) et n'apparaissent pas dans `/docs`. Le texte venant du web est affiché
 comme du texte ; seuls les liens http(s) sont cliquables.
 
 Données en JSON (avec `Authorization: Bearer <jeton>`) : `/internal/stats?days=N`,

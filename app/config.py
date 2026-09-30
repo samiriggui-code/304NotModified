@@ -173,6 +173,18 @@ OUTPUT_USD_PER_MTOK = float(os.environ.get("OUTPUT_USD_PER_MTOK", "20"))
 WEB_SEARCH_USD_PER_1000 = float(os.environ.get("WEB_SEARCH_USD_PER_1000", "10"))
 USD_TO_EUR = float(os.environ.get("USD_TO_EUR", "0.92"))
 
+# Moteur : délai maximal d'une recherche chez le fournisseur (sans relance automatique), nombre de
+# recherches payantes simultanées, et attente maximale d'une place avant de répondre « busy ».
+# Le client MCP attend 120 s : attente + recherche doivent rester en dessous.
+PROVIDER_TIMEOUT_SECONDS = float(os.environ.get("PROVIDER_TIMEOUT_SECONDS", "90"))
+MAX_CONCURRENT_SEARCHES = int(os.environ.get("MAX_CONCURRENT_SEARCHES", "4"))
+SEARCH_QUEUE_TIMEOUT_SECONDS = float(os.environ.get("SEARCH_QUEUE_TIMEOUT_SECONDS", "20"))
+# Délai conseillé à l'agent avant de réessayer après une cause passagère (busy, timeout…).
+RETRY_AFTER_SECONDS = int(os.environ.get("RETRY_AFTER_SECONDS", "30"))
+
+# Idempotence : durée pendant laquelle une même clé Idempotency-Key renvoie la même réponse.
+IDEMPOTENCY_TTL_SECONDS = int(os.environ.get("IDEMPOTENCY_TTL_SECONDS", str(24 * 3600)))
+
 MAX_QUESTION_CHARS = 500
 
 # Durée de conservation du journal des requêtes (questions, contextes, retours), en jours.

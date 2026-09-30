@@ -1,34 +1,83 @@
 """API de la version d'essai : un cache de réponses vérifiées pour agents."""
 
+import hashlib
 import hmac
+import ipaddress
+import json
 import logging
 import os
 import time
 from typing import Literal
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Response
 from fastapi.responses import HTMLResponse, PlainTextResponse
 from pydantic import BaseModel, Field
 
 from . import admin_auth, config
+from .aliases import CONTEXT_ALIASES, DOMAIN_ALIASES, QUESTION_ALIASES
+from .engine import SearchCoordinator
 from .normalize import question_key
 from .public import home_page, llms_text
-from .resolver import ClaudeResolver, NullResolver, Resolution, Resolver
+from .resolver import REASONS, TRANSIENT_REASONS, ClaudeResolver, NullResolver, Resolver
 from .store import CachedAnswer, Store
 
 log = logging.getLogger("304notmodified")
 
 
 class AnswerRequest(BaseModel):
-    question: str = Field(min_length=3, max_length=config.MAX_QUESTION_CHARS)
+    question: str = Field(min_length=3, max_length=config.MAX_QUESTION_CHARS, validation_alias=QUESTION_ALIASES)
     domain: str | None = Field(
-        default=None, description="Indice facultatif : " + ", ".join(sorted(config.DOMAIN_TTL_SECONDS))
+        default=None,
+        description="Indice facultatif : " + ", ".join(sorted(config.DOMAIN_TTL_SECONDS)),
+        validation_alias=DOMAIN_ALIASES,
     )
     context: str | None = Field(
         default=None,
         max_length=500,
         description="Facultatif : la tâche en cours de l'agent (sans données personnelles). Aide à améliorer le service.",
+        validation_alias=CONTEXT_ALIASES,
     )
+
+
+# Proxys de confiance : seuls eux peuvent ajouter une adresse à X-Forwarded-For (Traefik, le serveur
+# MCP, le tableau de bord, tous sur la machine ou le réseau Docker). Même liste que le « trust proxy »
+# du serveur MCP de Context7 : boucle locale, lien local, adresses privées, CGNAT.
+TRUSTED_PROXIES = [
+    ipaddress.ip_network(n)
+    for n in (
+        "127.0.0.0/8",
+        "::1/128",
+        "169.254.0.0/16",
+        "fe80::/10",
+        "10.0.0.0/8",
+        "172.16.0.0/12",
+        "192.168.0.0/16",
+        "fc00::/7",
+        "100.64.0.0/10",
+    )
+]
+
+
+def client_address(forwarded_for: str, peer: str | None) -> str:
+    """Adresse du client : on remonte X-Forwarded-For de droite à gauche et on s'arrête à la première
+    adresse qui n'est pas un proxy de confiance. Un client ne peut donc pas se faire passer pour un
+    autre en ajoutant une adresse en tête de l'en-tête."""
+    chain = [part.strip() for part in forwarded_for.split(",") if part.strip()]
+    # L'adresse de la connexion directe (Traefik, le serveur MCP…) ferme la chaîne, si c'en est une.
+    try:
+        if peer:
+            ipaddress.ip_address(peer)
+            chain.append(peer)
+    except ValueError:
+        pass
+    for candidate in reversed(chain):
+        try:
+            ip = ipaddress.ip_address(candidate)
+        except ValueError:
+            return candidate  # valeur illisible : on la garde telle quelle, sans lui faire confiance
+        if not any(ip in net for net in TRUSTED_PROXIES):
+            return candidate
+    return chain[0] if chain else "?"
 
 
 class FeedbackRequest(BaseModel):
@@ -94,11 +143,17 @@ def create_app(store: Store | None = None, resolver: Resolver | None = None) -> 
     store.create_key("Accès sans clé", 10**12, origin="anonymous", key=config.ANON_KEY)
     anon_counter = DailyCounter()
     signup_counter = DailyCounter()
+    searches = SearchCoordinator(
+        config.MAX_CONCURRENT_SEARCHES,
+        config.SEARCH_QUEUE_TIMEOUT_SECONDS,
+        flight_timeout=config.SEARCH_QUEUE_TIMEOUT_SECONDS + config.PROVIDER_TIMEOUT_SECONDS,
+    )
+    app.state.searches = searches
 
     def client_ip(request: Request) -> str:
-        # Derrière Traefik, la première adresse de X-Forwarded-For est celle du client.
-        forwarded = request.headers.get("x-forwarded-for", "")
-        return forwarded.split(",")[0].strip() or (request.client.host if request.client else "?")
+        return client_address(
+            request.headers.get("x-forwarded-for", ""), request.client.host if request.client else None
+        )
 
     def presented_key(request: Request) -> str:
         key = request.headers.get("x-api-key", "").strip()
@@ -190,10 +245,55 @@ def create_app(store: Store | None = None, resolver: Resolver | None = None) -> 
     @app.post("/v1/answer")
     def answer(
         body: AnswerRequest,
+        request: Request,
+        response: Response,
         api_key: str = Depends(require_key),
         x_client: str = Header(default=""),
         user_agent: str = Header(default=""),
+        idempotency_key: str = Header(
+            default="",
+            max_length=200,
+            description="Facultatif : même valeur pour les relances d'une même demande. La réponse enregistrée "
+            f"est renvoyée pendant {config.IDEMPOTENCY_TTL_SECONDS // 3600} h, sans être décomptée deux fois.",
+        ),
     ):
+        # Idempotence (préparation de la facturation) : une relance porte la même clé et reçoit le même
+        # résultat, sans nouvelle recherche ni nouveau décompte. Sans clé d'API, la portée est l'adresse IP.
+        idem = None
+        if idempotency_key:
+            scope = api_key if api_key != config.ANON_KEY else f"{config.ANON_KEY}:{client_ip(request)}"
+            fingerprint = hashlib.sha256(json.dumps(body.model_dump(), sort_keys=True).encode()).hexdigest()
+            state, stored = store.idempotency_begin(
+                scope, idempotency_key, fingerprint, time.time(), config.IDEMPOTENCY_TTL_SECONDS
+            )
+            if state == "replay":
+                response.headers["Idempotent-Replayed"] = "true"
+                return stored
+            if state == "conflict":
+                raise HTTPException(422, "Cette Idempotency-Key a déjà servi pour une autre demande.")
+            if state == "pending":
+                raise HTTPException(
+                    409,
+                    "La même demande est déjà en cours : réessayez dans quelques secondes.",
+                    headers={"Retry-After": "2"},
+                )
+            idem = (scope, idempotency_key)
+
+        try:
+            result = serve(body, api_key, x_client, user_agent)
+        except BaseException:
+            if idem:
+                store.idempotency_abort(*idem)
+            raise
+        if idem:
+            # Une cause passagère (busy, timeout…) n'est pas figée : la relance tentera à nouveau.
+            if result.get("retryable"):
+                store.idempotency_abort(*idem)
+            else:
+                store.idempotency_finish(*idem, result)
+        return result
+
+    def serve(body: AnswerRequest, api_key: str, x_client: str, user_agent: str) -> dict:
         started = time.monotonic()
         now = time.time()
         key = question_key(body.question)
@@ -202,7 +302,7 @@ def create_app(store: Store | None = None, resolver: Resolver | None = None) -> 
         client = (x_client or user_agent)[:200] or None
         channel = "mcp" if x_client.startswith("mcp:") else "http"
 
-        def record(outcome, domain, *, cost_eur=0.0, version_id=None):
+        def record(outcome, domain, *, cost_eur=0.0, version_id=None, reason=None):
             return store.log(
                 api_key=api_key,
                 key=key,
@@ -215,24 +315,43 @@ def create_app(store: Store | None = None, resolver: Resolver | None = None) -> 
                 client=client,
                 context=body.context,
                 answer_version_id=version_id,
+                reason=reason,
             )
 
-        cached = store.get_fresh(key, now)
-        if cached is not None:
+        def serve_cached(cached: CachedAnswer) -> dict:
             store.consume(api_key)
             request_id = record("hit", cached.domain, version_id=cached.version_id)
             return _payload(cached, cached=True, request_id=request_id)
 
-        try:
-            resolution = resolver.resolve(body.question, hint)
-        except Exception:
-            # Fournisseur en panne, crédit épuisé, limite atteinte… : l'agent reçoit « sans réponse »,
-            # jamais une erreur 500, et la question reste mesurée.
-            log.exception("Échec de la recherche fraîche")
-            resolution = Resolution(None, hint or config.DEFAULT_DOMAIN, 0.0)
+        cached = store.get_fresh(key, now)
+        if cached is not None:
+            return serve_cached(cached)
+
+        # Seule la question (publique) part vers le moteur de recherche : le contexte de l'agent reste
+        # dans son journal et n'influence jamais une réponse mutualisée.
+        outcome = searches.resolve(key, hint or config.DEFAULT_DOMAIN, lambda: resolver.resolve(body.question, hint))
+        resolution = outcome.resolution
+        if outcome.shared and resolution.answer is not None:
+            # Une autre requête vient de payer la recherche : on sert ce qu'elle a mis en cache.
+            cached = store.get_fresh(key, time.time())
+            if cached is not None:
+                return serve_cached(cached)
+
         if resolution.answer is None:
-            request_id = record("unanswered", resolution.domain, cost_eur=resolution.cost_eur)
-            return {"status": "unanswered", "request_id": request_id, "question": body.question, "cached": False}
+            reason = resolution.reason or "no_reliable_answer"
+            request_id = record("unanswered", resolution.domain, cost_eur=resolution.cost_eur, reason=reason)
+            retryable = reason in TRANSIENT_REASONS
+            return {
+                "status": "unanswered",
+                "request_id": request_id,
+                "question": body.question,
+                "cached": False,
+                "reason": reason,
+                "message": REASONS.get(reason, ""),
+                "retryable": retryable,
+                "retry_after": config.RETRY_AFTER_SECONDS if retryable else None,
+                "billable": False,
+            }
 
         fresh = CachedAnswer(
             key=key,
@@ -340,6 +459,12 @@ def create_app(store: Store | None = None, resolver: Resolver | None = None) -> 
             "price_per_request_eur": config.PRICE_PER_REQUEST_EUR,
             "log_retention_days": config.LOG_RETENTION_DAYS,
             "max_question_chars": config.MAX_QUESTION_CHARS,
+            # Moteur : causes d'absence de réponse (libellés) et limites de recherche.
+            "reasons": REASONS,
+            "transient_reasons": sorted(TRANSIENT_REASONS),
+            "max_concurrent_searches": config.MAX_CONCURRENT_SEARCHES,
+            "provider_timeout_seconds": config.PROVIDER_TIMEOUT_SECONDS,
+            "searches_in_flight": searches.in_flight(),
         }
 
     @app.get("/internal/keys", dependencies=[Depends(require_admin)], include_in_schema=False)
@@ -364,7 +489,7 @@ def create_app(store: Store | None = None, resolver: Resolver | None = None) -> 
     def login(body: LoginRequest, request: Request, x_forwarded_for: str = Header(default="")):
         if not (config.ADMIN_EMAIL and config.ADMIN_PASSWORD_HASH and config.SESSION_SECRET):
             raise HTTPException(503, "Connexion non configurée : ADMIN_EMAIL, ADMIN_PASSWORD_HASH, SESSION_SECRET.")
-        who = x_forwarded_for.split(",")[0].strip() or (request.client.host if request.client else "?")
+        who = client_address(x_forwarded_for, request.client.host if request.client else None)
         wait = throttle.locked_for(who)
         if wait:
             raise HTTPException(429, f"Trop d'essais : réessayez dans {wait // 60 + 1} min.")
@@ -399,6 +524,8 @@ def _payload(a: CachedAnswer, *, cached: bool, request_id: str) -> dict:
         "cached": cached,
         "fetched_at": a.created_at,
         "expires_at": a.expires_at,
+        # Une réponse livrée est décomptée du quota (future facturation) ; une absence de réponse ne l'est jamais.
+        "billable": True,
     }
 
 

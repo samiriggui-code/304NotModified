@@ -57,9 +57,14 @@ Les questions restées sans réponse ne sont jamais décomptées.
 ## Poser une question
 POST {url}/v1/answer
 Corps JSON : {{"question": "...", "domain": "facultatif", "context": "facultatif : votre tâche en cours"}}
-En-tête facultatif : X-Client: <nom et version de votre agent>
+En-têtes facultatifs : X-Client: <nom et version de votre agent> ;
+Idempotency-Key: <identifiant unique de votre demande> (une relance avec la même valeur reçoit la
+même réponse, sans nouvelle recherche ni nouveau décompte).
 Réponse : status (answered | unanswered), request_id, answer, sources [url, title], confidence (0-1),
-domain, cached (bool), fetched_at et expires_at (horodatages Unix).
+domain, cached (bool), fetched_at et expires_at (horodatages Unix), billable (décomptée ou non).
+Sans réponse : reason (search_disabled, no_reliable_answer, no_source, refused, parse_error, timeout,
+provider_error, busy, internal_error), message, retryable et retry_after (secondes). Ne relancez que
+si retryable vaut true ; les questions sans réponse ne sont jamais décomptées.
 Vérifiez vous-même les sources si l'enjeu est important : confidence est une estimation.
 
 ## MCP (Model Context Protocol)

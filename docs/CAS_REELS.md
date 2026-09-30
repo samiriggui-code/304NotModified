@@ -176,3 +176,32 @@
 - **Réponse attendue de 304** : « Ajoutez `'/'` explicitement au matcher :
   `matcher: ['/', '/((?!api/|_next/).*)']`. Dans le proxy, `request.nextUrl.pathname` n'inclut pas
   le basePath ; pour rediriger, partez de `request.nextUrl.clone()`, qui le conserve. »
+
+## 10. SDK Python d'Anthropic : relances automatiques et délai de 600 s par défaut
+
+- **Date** : 30 septembre 2026
+- **Domaine** : `logiciel`
+- **Question** : « Le client Python `anthropic` relance-t-il seul un appel qui échoue, et au bout de
+  combien de temps abandonne-t-il ? »
+- **Ce qui s'est passé** : le moteur de 304 créait `anthropic.Anthropic()` sans réglage. En relisant
+  le SDK de Context7 (qui ne relance jamais un POST), Claude a vérifié la version installée :
+  **1.9.0**, `DEFAULT_MAX_RETRIES = 2`, délai de lecture **600 s**, relance sur 408, 409, 429, 5xx
+  et coupure réseau. Une recherche web payante pouvait donc être relancée (et facturée) jusqu'à trois
+  fois, et un appel bloqué occuper le service trente minutes, bien au-delà des 120 s du client MCP.
+- **Source de la bonne réponse** : `anthropic/_constants.py` et `anthropic/_base_client.py`
+  (`_should_retry`) dans le paquet installé.
+- **Réponse attendue de 304** : « Oui : 2 relances par défaut et 600 s de lecture (version 1.9.0).
+  Pour un appel coûteux, créez le client avec `anthropic.Anthropic(timeout=…, max_retries=0)` et
+  décidez vous-même d'une éventuelle relance. »
+
+## 11. Git Bash sous Windows : `NEXT_PUBLIC_BASE_PATH=/admin` devient un chemin Windows
+
+- **Date** : 30 septembre 2026
+- **Domaine** : `logiciel`
+- **Question** : « Pourquoi `next build` échoue avec *Specified basePath has to start with a /, found
+  "C:/Program Files/Git/admin"* sous Windows ? »
+- **Ce qui s'est passé** : Git Bash (MSYS) convertit automatiquement tout argument ou variable qui
+  ressemble à un chemin Unix. `/admin` devient `C:/Program Files/Git/admin` avant d'atteindre Next.js.
+- **Source de la bonne réponse** : essai ; la conversion se désactive avec `MSYS_NO_PATHCONV=1`.
+- **Réponse attendue de 304** : « Préfixez la commande : `MSYS_NO_PATHCONV=1
+  NEXT_PUBLIC_BASE_PATH=/admin npm run build`, ou lancez-la depuis PowerShell. »

@@ -32,6 +32,23 @@ Consignes par domaine :
 """ + "\n\n".join(config.DOMAIN_GUIDANCE.values())
 
 
+# Pourquoi une question reste sans réponse. Chaque cause est journalisée et renvoyée à l'agent
+# (avec un message sans détail interne), pour qu'une abstention soit observable et explicable.
+REASONS = {
+    "search_disabled": "Recherche fraîche désactivée pour le moment : la question est enregistrée.",
+    "no_reliable_answer": "Aucune réponse fiable trouvée dans les sources consultées.",
+    "no_source": "Réponse écartée : aucune source vérifiable (URL) ne la justifiait.",
+    "refused": "Question refusée par le moteur de recherche.",
+    "parse_error": "Réponse du moteur de recherche inexploitable.",
+    "timeout": "La recherche a dépassé le délai maximal.",
+    "provider_error": "Moteur de recherche momentanément indisponible.",
+    "busy": "Trop de recherches en cours : réessayez dans quelques secondes.",
+    "internal_error": "Erreur interne pendant la recherche.",
+}
+# Causes passagères : l'agent peut réessayer plus tard (les autres donneraient le même résultat).
+TRANSIENT_REASONS = {"timeout", "provider_error", "busy", "internal_error"}
+
+
 @dataclass
 class Resolution:
     answer: str | None
@@ -39,6 +56,7 @@ class Resolution:
     confidence: float
     sources: list[dict] = field(default_factory=list)
     cost_eur: float = 0.0
+    reason: str | None = None  # cause d'absence de réponse (clé de REASONS), None si réponse
 
 
 class Resolver(Protocol):
@@ -47,7 +65,17 @@ class Resolver(Protocol):
 
 class NullResolver:
     def resolve(self, question: str, domain_hint: str | None) -> Resolution:
-        return Resolution(answer=None, domain=domain_hint or config.DEFAULT_DOMAIN, confidence=0.0)
+        return Resolution(
+            answer=None, domain=domain_hint or config.DEFAULT_DOMAIN, confidence=0.0, reason="search_disabled"
+        )
+
+
+class ProviderTimeout(Exception):
+    """Le fournisseur n'a pas répondu dans le délai maximal."""
+
+
+class ProviderError(Exception):
+    """Le fournisseur a refusé ou échoué (crédit, limite, panne) : rien n'a été produit."""
 
 
 class ClaudeResolver:
@@ -56,9 +84,22 @@ class ClaudeResolver:
     def __init__(self, client=None):
         import anthropic
 
-        self._client = client or anthropic.Anthropic()
+        # Délai maximal explicite et aucune relance automatique : une recherche est payante et un
+        # POST relancé après une coupure peut être facturé deux fois (principe repris du SDK de
+        # Context7, qui ne relance que les GET). La relance, si elle a lieu, est décidée par l'agent.
+        self._client = client or anthropic.Anthropic(timeout=config.PROVIDER_TIMEOUT_SECONDS, max_retries=0)
+        self._timeout_errors: tuple[type[BaseException], ...] = (anthropic.APITimeoutError,)
+        self._provider_errors: tuple[type[BaseException], ...] = (anthropic.APIError,)
 
     def resolve(self, question: str, domain_hint: str | None) -> Resolution:
+        try:
+            return self._resolve(question, domain_hint)
+        except self._timeout_errors as exc:
+            raise ProviderTimeout(type(exc).__name__) from exc
+        except self._provider_errors as exc:
+            raise ProviderError(type(exc).__name__) from exc
+
+    def _resolve(self, question: str, domain_hint: str | None) -> Resolution:
         user = question if not domain_hint else f"[domaine indiqué : {domain_hint}]\n{question}"
         messages = [{"role": "user", "content": user}]
         cost = 0.0
@@ -81,12 +122,12 @@ class ClaudeResolver:
             messages.append({"role": "assistant", "content": response.content})
 
         if response.stop_reason == "refusal":
-            return Resolution(None, domain_hint or config.DEFAULT_DOMAIN, 0.0, cost_eur=cost)
+            return Resolution(None, domain_hint or config.DEFAULT_DOMAIN, 0.0, cost_eur=cost, reason="refused")
 
         text = "".join(b.text for b in response.content if b.type == "text")
         parsed = _parse_final_json(text)
         if parsed is None:
-            return Resolution(None, domain_hint or config.DEFAULT_DOMAIN, 0.0, cost_eur=cost)
+            return Resolution(None, domain_hint or config.DEFAULT_DOMAIN, 0.0, cost_eur=cost, reason="parse_error")
 
         domain = parsed.get("domain")
         if domain_hint in config.DOMAIN_TTL_SECONDS:
@@ -100,9 +141,11 @@ class ClaudeResolver:
         except (TypeError, ValueError):
             confidence = 0.0
         answer = parsed.get("answer")
-        if not answer or not sources:
+        if not answer:
+            return Resolution(None, domain, 0.0, cost_eur=cost, reason="no_reliable_answer")
+        if not sources:
             # Une réponse sans source n'est jamais mise en cache.
-            return Resolution(None, domain, 0.0, cost_eur=cost)
+            return Resolution(None, domain, 0.0, cost_eur=cost, reason="no_source")
         return Resolution(str(answer), domain, confidence, sources, cost)
 
 

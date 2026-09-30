@@ -60,6 +60,16 @@ CREATE TABLE IF NOT EXISTS api_keys (
     used INTEGER NOT NULL DEFAULT 0,
     created_at REAL NOT NULL
 );
+-- Idempotence de /v1/answer : une relance avec la même Idempotency-Key reçoit la réponse déjà
+-- produite, sans nouvelle recherche ni nouveau décompte (fondation de la future facturation).
+CREATE TABLE IF NOT EXISTS idempotency (
+    scope TEXT NOT NULL,            -- clé d'API, ou « anonymous:<adresse IP> »
+    idem_key TEXT NOT NULL,
+    fingerprint TEXT NOT NULL,      -- empreinte de la demande : même clé, autre demande = refus
+    response TEXT,                  -- NULL tant que la demande est en cours
+    created_at REAL NOT NULL,
+    PRIMARY KEY (scope, idem_key)
+);
 """
 
 
@@ -72,6 +82,7 @@ MIGRATIONS = {
         "client": "TEXT",  # nom et version de l'agent ou de son outil
         "context": "TEXT",  # ce que l'agent était en train de faire, s'il l'a dit
         "answer_version_id": "INTEGER",
+        "reason": "TEXT",  # cause d'une absence de réponse (voir resolver.REASONS)
     },
     "api_keys": {
         "origin": "TEXT",  # admin (créée depuis le tableau de bord) | self (demandée par l'agent)
@@ -131,6 +142,44 @@ class Store:
             )
             self._db.commit()
         return key
+
+    # --- idempotence ---------------------------------------------------------
+
+    def idempotency_begin(
+        self, scope: str, idem_key: str, fingerprint: str, now: float, ttl: float
+    ) -> tuple[str, dict | None]:
+        """Réserve la clé. Renvoie ("new", None), ("replay", réponse), ("pending", None) ou ("conflict", None)."""
+        with self._lock:
+            self._db.execute("DELETE FROM idempotency WHERE created_at < ?", (now - ttl,))
+            row = self._db.execute(
+                "SELECT fingerprint, response FROM idempotency WHERE scope = ? AND idem_key = ?", (scope, idem_key)
+            ).fetchone()
+            if row is None:
+                self._db.execute(
+                    "INSERT INTO idempotency (scope, idem_key, fingerprint, created_at) VALUES (?, ?, ?, ?)",
+                    (scope, idem_key, fingerprint, now),
+                )
+                self._db.commit()
+                return "new", None
+            self._db.commit()
+        if row["fingerprint"] != fingerprint:
+            return "conflict", None
+        if row["response"] is None:
+            return "pending", None
+        return "replay", json.loads(row["response"])
+
+    def idempotency_finish(self, scope: str, idem_key: str, response: dict) -> None:
+        with self._lock:
+            self._db.execute(
+                "UPDATE idempotency SET response = ? WHERE scope = ? AND idem_key = ?",
+                (json.dumps(response), scope, idem_key),
+            )
+            self._db.commit()
+
+    def idempotency_abort(self, scope: str, idem_key: str) -> None:
+        with self._lock:
+            self._db.execute("DELETE FROM idempotency WHERE scope = ? AND idem_key = ?", (scope, idem_key))
+            self._db.commit()
 
     def count_keys_since(self, origin: str, since: float) -> int:
         with self._lock:
@@ -209,7 +258,7 @@ class Store:
             rows = self._db.execute(
                 """SELECT r.ts, r.request_id, r.question, r.domain, r.outcome, r.latency_ms, r.cost_eur,
                           COALESCE(k.label, '?') AS key_label, COALESCE(r.channel, 'http') AS channel,
-                          r.client, r.context, v.answer, v.confidence, v.sources,
+                          r.client, r.context, r.reason, v.answer, v.confidence, v.sources,
                           f.useful AS feedback_useful, f.issue AS feedback_issue, f.comment AS feedback_comment
                    FROM requests r LEFT JOIN api_keys k ON k.key = r.api_key
                    LEFT JOIN answer_versions v ON v.id = r.answer_version_id
@@ -275,14 +324,15 @@ class Store:
         client=None,
         context=None,
         answer_version_id=None,
+        reason=None,
     ) -> str:
         request_id = request_id or "req_" + secrets.token_urlsafe(12)
         with self._lock:
             self._db.execute(
                 """INSERT INTO requests
                    (ts, api_key, key, question, domain, outcome, latency_ms, cost_eur,
-                    request_id, channel, client, context, answer_version_id)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    request_id, channel, client, context, answer_version_id, reason)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     time.time(),
                     api_key,
@@ -297,6 +347,7 @@ class Store:
                     client,
                     context,
                     answer_version_id,
+                    reason,
                 ),
             )
             self._db.commit()
@@ -416,6 +467,12 @@ class Store:
                        GROUP BY key ORDER BY 2 DESC LIMIT 20"""
                 ).fetchall()
             ]
+            unanswered_reasons = dict(
+                q(
+                    """SELECT COALESCE(reason, 'inconnue'), COUNT(*) FROM (SELECT * FROM requests WHERE ts >= ?) AS requests
+                       WHERE outcome = 'unanswered' GROUP BY 1"""
+                ).fetchall()
+            )
 
             channels = dict(
                 q(
@@ -455,6 +512,7 @@ class Store:
             "domains": domains,
             "top_repeated_questions": top,
             "top_unanswered_questions": unanswered,
+            "unanswered_reasons": unanswered_reasons,
             "channels": channels,
             "clients": clients,
             "feedback": {

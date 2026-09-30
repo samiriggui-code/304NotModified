@@ -2,7 +2,17 @@
 
 import Link from 'next/link';
 import { Bot, Coins, Database, LayoutDashboard, Repeat, Send, ThumbsUp, Zap } from 'lucide-react';
-import { fmtEur, fmtInt, fmtPct, OUTCOMES, useDomains, useStats, useTimeseries, type Outcome } from '@/lib/nm304';
+import {
+  fmtEur,
+  fmtInt,
+  fmtPct,
+  OUTCOMES,
+  useDomains,
+  useSettings,
+  useStats,
+  useTimeseries,
+  type Outcome,
+} from '@/lib/nm304';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardHeading, CardTitle, CardToolbar } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -103,8 +113,9 @@ export default function DashboardPage() {
               <OutcomeShare stats={s.outcomes} />
               <p className="text-sm text-muted-foreground">
                 <b>Cache</b> : déjà en mémoire, servie immédiatement (coût quasi nul). <b>Recherche</b> : nouvelle
-                recherche sur le web (payante). <b>Sans réponse</b> : rien de fiable trouvé, ou recherche désactivée.
+                recherche sur le web (payante). <b>Sans réponse</b> : jamais décomptée ; la cause est ci-dessous.
               </p>
+              <UnansweredReasons counts={s.unanswered_reasons} />
             </CardContent>
           </Card>
         )}
@@ -241,6 +252,27 @@ function OutcomeShare({ stats }: { stats: Partial<Record<Outcome, number>> }) {
         ))}
       </div>
     </>
+  );
+}
+
+// Causes des absences de réponse, avec les libellés fournis par l'API.
+function UnansweredReasons({ counts }: { counts: Record<string, number> }) {
+  const reasons = useSettings().data?.reasons ?? {};
+  const rows = Object.entries(counts ?? {}).sort((a, b) => b[1] - a[1]);
+  if (!rows.length) return null;
+  return (
+    <div className="space-y-1.5 text-sm">
+      <div className="font-medium">Causes des absences de réponse</div>
+      {rows.map(([reason, n]) => (
+        <div key={reason} className="flex items-center justify-between gap-4">
+          <span>
+            <code className="text-xs">{reason}</code>{' '}
+            <span className="text-muted-foreground">{reasons[reason] ?? ''}</span>
+          </span>
+          <b className="tabular-nums">{fmtInt(n)}</b>
+        </div>
+      ))}
+    </div>
   );
 }
 

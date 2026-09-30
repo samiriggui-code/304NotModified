@@ -9,6 +9,7 @@ import {
   fmtPct,
   hostOf,
   safeUrl,
+  useSettings,
   type AnswerRow,
   type RequestRow,
   type Source,
@@ -88,6 +89,7 @@ function DetailSheet({
 }
 
 export function RequestSheet({ row, onClose }: { row: RequestRow | null; onClose: () => void }) {
+  const reasons = useSettings().data?.reasons ?? {};
   return (
     <DetailSheet
       open={!!row}
@@ -112,9 +114,18 @@ export function RequestSheet({ row, onClose }: { row: RequestRow | null; onClose
           </div>
           <Field label="Tâche de l'agent">{row.context ?? none("l'agent ne l'a pas précisée")}</Field>
           <Separator />
-          <Field label="Réponse servie">
-            {row.answer ?? none('aucune : rien de fiable trouvé, ou recherche désactivée')}
-          </Field>
+          <Field label="Réponse servie">{row.answer ?? none('aucune')}</Field>
+          {row.outcome === 'unanswered' && (
+            <Field label="Cause">
+              {row.reason ? (
+                <>
+                  <code className="text-xs">{row.reason}</code> · {reasons[row.reason] ?? ''}
+                </>
+              ) : (
+                none('non enregistrée (requête antérieure au suivi des causes)')
+              )}
+            </Field>
+          )}
           {row.confidence !== null && <Field label="Confiance">{fmtPct(row.confidence)}</Field>}
           <Field label="Sources">
             <SourceList sources={row.sources ?? []} />

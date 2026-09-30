@@ -37,6 +37,7 @@ export interface Stats {
   domains: { domain: string; requests: number; hits: number | null }[];
   top_repeated_questions: { key: string; question: string; requests: number }[];
   top_unanswered_questions: { question: string; requests: number }[];
+  unanswered_reasons: Record<string, number>;
   channels: Record<string, number>;
   clients: { client: string; requests: number }[];
   feedback: {
@@ -67,6 +68,7 @@ export interface RequestRow {
   channel: string;
   client: string | null;
   context: string | null;
+  reason: string | null;
   answer: string | null;
   confidence: number | null;
   sources: Source[];
@@ -143,6 +145,11 @@ export interface Settings {
   price_per_request_eur: number;
   log_retention_days: number;
   max_question_chars: number;
+  reasons: Record<string, string>;
+  transient_reasons: string[];
+  max_concurrent_searches: number;
+  provider_timeout_seconds: number;
+  searches_in_flight: number;
 }
 
 export const KEY_ORIGINS: Record<KeyRow['origin'], string> = {

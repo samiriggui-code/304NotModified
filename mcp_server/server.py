@@ -11,14 +11,16 @@ Deux façons de le servir :
 """
 
 import os
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 import httpx
 from mcp.server.mcpserver import Context, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from app import config
+from app.aliases import CONTEXT_ALIASES, DOMAIN_ALIASES, QUESTION_ALIASES
 
 DEFAULT_URL = "http://localhost:8304"
 # Une recherche fraîche (web + recoupement) peut prendre plusieurs dizaines de secondes.
@@ -82,7 +84,12 @@ def create_server(http: httpx.Client, api_key: str | None = None, *, remote: boo
         ),
         annotations=ToolAnnotations(title="Poser une question", read_only_hint=True, open_world_hint=True),
     )
-    def ask(question: str, ctx: Context, domain: str | None = None, context: str | None = None) -> dict[str, Any]:
+    def ask(
+        question: Annotated[str, Field(validation_alias=QUESTION_ALIASES)],
+        ctx: Context,
+        domain: Annotated[str | None, Field(validation_alias=DOMAIN_ALIASES)] = None,
+        context: Annotated[str | None, Field(validation_alias=CONTEXT_ALIASES)] = None,
+    ) -> dict[str, Any]:
         body = {"question": question}
         if domain:
             body["domain"] = domain

@@ -161,3 +161,18 @@
   les siennes avec des overrides imbriqués : `"eslint": {"ajv": "^6.12.6", "minimatch": "^3.1.2"}`
   et la même chose pour `"@eslint/eslintrc"`. ESLint est un outil de développement : il n'est pas
   livré sur le serveur. »
+
+## 9. Next.js 16 : avec un basePath, le « proxy » (ex-middleware) ne protège pas la racine
+
+- **Date** : 30 septembre 2026
+- **Domaine** : `logiciel`
+- **Question** : « Next.js 16 avec `basePath: '/admin'` : pourquoi mon `proxy.ts` redirige
+  `/admin/requetes` vers la connexion, mais laisse passer `/admin` ? »
+- **Ce qui s'est passé** : le filtre repris du projet Qualiopi (`matcher: ['/((?!api/|_next/…).*)']`)
+  couvre toutes les pages… sauf la racine quand l'application est servie sous un basePath. La page
+  d'accueil du tableau de bord s'affichait sans session (les données restaient refusées par l'API,
+  d'où des 403). Trouvé en testant les adresses une par une avec curl.
+- **Source de la bonne réponse** : essais sur Next.js 16.1.6.
+- **Réponse attendue de 304** : « Ajoutez `'/'` explicitement au matcher :
+  `matcher: ['/', '/((?!api/|_next/).*)']`. Dans le proxy, `request.nextUrl.pathname` n'inclut pas
+  le basePath ; pour rediriger, partez de `request.nextUrl.clone()`, qui le conserve. »

@@ -19,7 +19,8 @@ la garde pour les suivants.
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -r requirements-dev.txt
-cp .env.example .env   # puis remplir ADMIN_TOKEN (et ANTHROPIC_API_KEY pour les vraies recherches)
+cp .env.example .env   # puis remplir ADMIN_EMAIL, ADMIN_PASSWORD_HASH, SESSION_SECRET (et ANTHROPIC_API_KEY)
+.venv/bin/python -m app.cli hash-password   # produit l'empreinte pour ADMIN_PASSWORD_HASH
 ```
 
 Sans `ANTHROPIC_API_KEY`, le service tourne quand même : les questions sont enregistrées comme
@@ -27,17 +28,26 @@ Sans `ANTHROPIC_API_KEY`, le service tourne quand même : les questions sont enr
 
 ## Lancer
 
+Deux applications séparées :
+
 ```bash
+# 1. L'API et le MCP pour les agents (Python)
 set -a; . ./.env; set +a
 .venv/bin/uvicorn app.main:app --port 8304
+
+# 2. Le tableau de bord du propriétaire (Next.js, socle Metronic), dans un autre terminal
+cd admin && npm ci && API_URL=http://127.0.0.1:8304 npm run dev    # http://localhost:3304
 ```
+
+En production, le tableau de bord est servi sous `/admin` (voir [`docs/DEPLOIEMENT.md`](docs/DEPLOIEMENT.md)).
 
 ## Utiliser
 
-Créer une clé d'API (administrateur) :
+Créer une clé d'API : depuis le tableau de bord (page « Clés d'API »), ou en script avec le jeton
+fixe facultatif `ADMIN_TOKEN` :
 
 ```bash
-curl -X POST localhost:8304/admin/keys \
+curl -X POST localhost:8304/internal/keys \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
   -d '{"label": "premier-testeur", "quota": 1000}'
 ```
@@ -65,28 +75,27 @@ Réponse :
 }
 ```
 
-### Tableau de bord
+### Tableau de bord (application séparée, `admin/`)
 
-Ouvrir **`http://localhost:8304/admin`** dans un navigateur et entrer le jeton `ADMIN_TOKEN`.
-On y voit en un coup d'œil : les chiffres clés (requêtes, taux de répétition, taux de cache,
-revenu, coût et marge estimés), d'où viennent les réponses (cache, recherche, sans réponse), les
-questions les plus répétées et celles restées sans réponse, les dernières requêtes, les réponses
-en mémoire avec leurs sources, et les clés d'API (avec création d'une nouvelle clé).
-Des graphiques montrent l'évolution sur la période choisie (24 h, 7, 30 ou 90 jours, tout) :
-volume de requêtes par heure ou par jour (cache, recherche, sans réponse), taux de cache, coût
-des recherches, domaines et agents les plus actifs. Valeurs au survol ou au toucher, et bouton
-« Tableau » pour lire les chiffres exacts. La page se rafraîchit toute seule toutes les 30 secondes. Le texte venant du web y est toujours
-affiché comme du texte brut, jamais interprété.
+Réservé au propriétaire : connexion par e-mail et mot de passe, construit sur le socle Metronic
+(mise en page CRM) repris de GSMS Qualiopi. Pages :
 
-Les mêmes données en JSON : `/admin/stats?days=N`, `/admin/timeseries?days=N&bucket=hour|day`,
-`/admin/requests`, `/admin/answers`, `/admin/feedback`, `/admin/keys`.
+- **Tableau de bord** : filtre de période (24 h, 7, 30, 90 jours, tout), chiffres clés (requêtes,
+  taux de répétition, taux de cache, marge, retours utiles), volume de requêtes par heure ou par
+  jour (cache, recherche, sans réponse), taux de cache, coût des recherches, domaines et agents
+  les plus actifs, questions répétées et sans réponse ;
+- **Requêtes** : chaque question, son agent, son canal, et en détail la tâche de l'agent et la
+  réponse exacte servie ;
+- **Retours des agents**, **Agents**, **Réponses en mémoire** (avec sources), **Clés d'API**.
 
-Lire les statistiques : volume, taux de répétition, taux de cache, coût, revenu et marge estimés,
-questions sans réponse.
+Le navigateur ne parle qu'au serveur du tableau de bord, qui garde la session dans un cookie
+`httpOnly` et relaie vers les routes `/internal/*` de l'API. Ces routes ne sont pas exposées sur
+Internet (Caddy les bloque) et n'apparaissent pas dans `/docs`. Le texte venant du web est affiché
+comme du texte ; seuls les liens http(s) sont cliquables.
 
-```bash
-curl localhost:8304/admin/stats -H "Authorization: Bearer $ADMIN_TOKEN"
-```
+Données en JSON (avec `Authorization: Bearer <jeton>`) : `/internal/stats?days=N`,
+`/internal/timeseries?days=N&bucket=hour|day`, `/internal/requests`, `/internal/answers`,
+`/internal/feedback`, `/internal/keys`.
 
 Champs facultatifs : `context` (la tâche en cours de l'agent) et l'en-tête `X-Client` (nom de
 l'agent). Chaque réponse porte un `request_id`, que l'agent renvoie pour dire si elle l'a aidé :
@@ -158,20 +167,23 @@ Des questions de référence pour tester le service : [`docs/QUESTIONS_TEST.md`]
 
 ```bash
 .venv/bin/ruff check . && .venv/bin/ruff format --check . && .venv/bin/python -m pytest
+cd admin && npm run typecheck && npm run lint && NEXT_PUBLIC_BASE_PATH=/admin npm run build
 ```
 
 ## Structure
 
 ```
 app/
-  main.py        API (FastAPI) : réponses, clés, statistiques, llms.txt
-  dashboard.html Tableau de bord (/admin)
+  main.py        API (FastAPI) : routes des agents (/v1) et routes internes (/internal)
+  admin_auth.py  Connexion du propriétaire : mot de passe (scrypt), sessions signées
+  cli.py         python -m app.cli hash-password
   store.py       SQLite : cache, journal des requêtes, clés d'API
   resolver.py    Recherche fraîche via Claude + recherche web
   normalize.py   Normalisation des questions
   config.py      Réglages (durées, quotas, prix, tarifs)
 mcp_server/
-  server.py      Serveur MCP : outil `ask` qui relaie vers l'API
+  server.py      Serveur MCP : outils `ask` et `feedback` qui relaient vers l'API
+admin/           Tableau de bord du propriétaire (Next.js, socle Metronic), servi sous /admin
 tests/           Tests automatisés
 docs/VISION.md   Vision, marché, modèle économique, feuille de route
 deploy/          Scripts d'installation et de mise à jour du VPS

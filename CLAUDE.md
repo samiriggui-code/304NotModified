@@ -37,4 +37,13 @@ ni de pull request, sauf demande de sa part.
 
 ```bash
 .venv/bin/ruff check . && .venv/bin/ruff format --check . && .venv/bin/python -m pytest
+# si admin/ a changé :
+cd admin && npm run typecheck && npm run lint && NEXT_PUBLIC_BASE_PATH=/admin npm run build
 ```
+
+## Architecture
+
+- `app/` + `mcp_server/` : le service pour les agents (API publique `/v1`, `/llms.txt`, MCP).
+- `admin/` : le tableau de bord du propriétaire, application Next.js séparée (socle Metronic,
+  licence du propriétaire), servie sous `/admin`. Elle ne parle qu'aux routes `/internal/*` de l'API,
+  bloquées depuis Internet par Caddy. Ne jamais exposer `/internal` ni y mettre une route pour les agents.

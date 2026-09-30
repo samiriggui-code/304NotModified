@@ -218,3 +218,10 @@ def test_timeseries_and_period_filter(setup):
     assert client.get("/internal/stats?days=1", headers=ADMIN).json()["requests"] == 2
     assert client.get("/internal/stats", headers=ADMIN).json()["requests"] == 3
     assert client.get("/internal/timeseries").status_code == 403
+
+
+def test_internal_routes_are_hidden_from_public_docs(setup):
+    client, _, _ = setup
+    paths = client.get("/openapi.json").json()["paths"]
+    assert "/v1/answer" in paths and "/v1/feedback" in paths
+    assert not [p for p in paths if p.startswith("/internal")]

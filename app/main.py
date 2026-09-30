@@ -194,16 +194,16 @@ def create_app(store: Store | None = None, resolver: Resolver | None = None) -> 
             raise HTTPException(404, "Requête inconnue pour cette clé.")
         return {"status": "recorded", "request_id": body.request_id}
 
-    @app.post("/internal/keys", dependencies=[Depends(require_admin)])
+    @app.post("/internal/keys", dependencies=[Depends(require_admin)], include_in_schema=False)
     def create_key(body: KeyRequest):
         return {"api_key": store.create_key(body.label, body.quota), "quota": body.quota}
 
-    @app.get("/internal/stats", dependencies=[Depends(require_admin)])
+    @app.get("/internal/stats", dependencies=[Depends(require_admin)], include_in_schema=False)
     def stats(days: float | None = Query(default=None, gt=0, le=3650)):
         since = time.time() - days * 86400 if days else 0.0
         return store.stats(config.PRICE_PER_REQUEST_EUR, since=since)
 
-    @app.get("/internal/timeseries", dependencies=[Depends(require_admin)])
+    @app.get("/internal/timeseries", dependencies=[Depends(require_admin)], include_in_schema=False)
     def timeseries(
         days: float = Query(default=7, gt=0, le=3650),
         bucket: Literal["hour", "day"] = "day",
@@ -215,25 +215,25 @@ def create_app(store: Store | None = None, resolver: Resolver | None = None) -> 
             tz_offset_seconds=tz_offset_min * 60,
         )
 
-    @app.get("/internal/keys", dependencies=[Depends(require_admin)])
+    @app.get("/internal/keys", dependencies=[Depends(require_admin)], include_in_schema=False)
     def list_keys():
         return store.list_keys()
 
-    @app.get("/internal/requests", dependencies=[Depends(require_admin)])
+    @app.get("/internal/requests", dependencies=[Depends(require_admin)], include_in_schema=False)
     def recent_requests(limit: int = Query(default=50, ge=1, le=500)):
         return store.recent_requests(limit)
 
-    @app.get("/internal/feedback", dependencies=[Depends(require_admin)])
+    @app.get("/internal/feedback", dependencies=[Depends(require_admin)], include_in_schema=False)
     def list_feedback(limit: int = Query(default=50, ge=1, le=500)):
         return store.list_feedback(limit)
 
-    @app.get("/internal/answers", dependencies=[Depends(require_admin)])
+    @app.get("/internal/answers", dependencies=[Depends(require_admin)], include_in_schema=False)
     def list_answers(limit: int = Query(default=50, ge=1, le=500)):
         return store.list_answers(limit)
 
     # Connexion du tableau de bord (front Next.js séparé, voir admin/). Les routes /internal/* ne sont
     # pas exposées sur Internet : Caddy les bloque, seul le front, sur le serveur, les appelle.
-    @app.post("/internal/auth/login")
+    @app.post("/internal/auth/login", include_in_schema=False)
     def login(body: LoginRequest, request: Request, x_forwarded_for: str = Header(default="")):
         if not (config.ADMIN_EMAIL and config.ADMIN_PASSWORD_HASH and config.SESSION_SECRET):
             raise HTTPException(503, "Connexion non configurée : ADMIN_EMAIL, ADMIN_PASSWORD_HASH, SESSION_SECRET.")
@@ -253,7 +253,7 @@ def create_app(store: Store | None = None, resolver: Resolver | None = None) -> 
             "user": {"email": email},
         }
 
-    @app.get("/internal/auth/me")
+    @app.get("/internal/auth/me", include_in_schema=False)
     def me(who: str = Depends(require_admin)):
         return {"email": who}
 

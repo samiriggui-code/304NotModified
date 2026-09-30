@@ -218,7 +218,9 @@ Une seule intégration peut produire des centaines de milliers d'appels par mois
 - **Clés d'API avec quota gratuit.** Les questions restées sans réponse ne sont pas décomptées.
 - **Journal complet** de chaque requête : date, question, domaine, résultat (servie par le cache,
   recherche fraîche ou sans réponse), latence, coût estimé.
-- **`GET /admin/stats`** : volume, **taux de répétition**, taux de cache, latences, revenu, coût et
+- **Tableau de bord séparé** (`admin/`, Next.js sur le socle Metronic, servi sous `/admin`, connexion
+  par e-mail et mot de passe) : graphiques d'activité, requêtes, retours, agents, réponses, clés.
+- **`GET /internal/stats`** (réservé au tableau de bord, bloqué depuis Internet) : volume, **taux de répétition**, taux de cache, latences, revenu, coût et
   marge estimés, domaines, questions les plus répétées, questions sans réponse.
 - **`/llms.txt`** et OpenAPI (`/docs`) pour les agents.
 - **Mode sans clé Anthropic** : les questions sont enregistrées comme « sans réponse », ce qui

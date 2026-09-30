@@ -95,3 +95,12 @@ def test_software_guidance_is_sent_to_the_researcher():
 
     system = client.requests[0]["system"]
     assert "notes de version" in system and "guides de migration" in system
+
+
+def test_regulation_guidance_points_to_official_sources():
+    client = FakeClient([message([NS(type="text", text=FINAL, citations=None)])])
+    ClaudeResolver(client).resolve("Une PME doit-elle émettre des factures électroniques ?", "reglementation")
+
+    system = client.requests[0]["system"]
+    assert "Légifrance" in system and "impots.gouv.fr" in system
+    assert "conseil personnalisé" in system

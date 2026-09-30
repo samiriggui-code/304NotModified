@@ -15,8 +15,23 @@ DOMAIN_TTL_SECONDS = {
 DEFAULT_DOMAIN = "general"
 
 # Consignes de recherche propres à un domaine, ajoutées à la consigne générale du chercheur.
-# Premier domaine choisi : « logiciel » (voir docs/VISION.md et docs/CAS_REELS.md).
+# Premier domaine choisi : « reglementation » (entreprises, France puis UE), en commençant par la
+# facturation électronique (voir docs/VISION.md, §12).
 DOMAIN_GUIDANCE = {
+    "reglementation": (
+        "Questions sur une obligation réglementaire, fiscale ou sociale des entreprises (France, Union européenne) :\n"
+        "- Appuie-toi d'abord sur les sources officielles : Légifrance, EUR-Lex, Journal officiel,\n"
+        "  impots.gouv.fr, BOFiP, economie.gouv.fr, entreprendre.service-public.fr, service-public.fr,\n"
+        "  URSSAF, CNIL, sites de la Commission européenne. Un article de presse, d'éditeur de logiciel\n"
+        "  ou de cabinet peut aider à trouver le texte, mais ne suffit pas seul : dans ce cas, baisse\n"
+        "  nettement la confiance.\n"
+        "- Donne les dates d'application exactes et précise qui est concerné (taille d'entreprise,\n"
+        "  secteur, régime de TVA…).\n"
+        "- Vérifie qu'aucun report ou modification récente n'a changé la règle (loi de finances,\n"
+        "  ordonnance, omnibus européen…) et signale-le s'il y en a un. Un texte adopté mais pas encore\n"
+        "  publié au Journal officiel doit être signalé comme tel.\n"
+        "- Réponds en information générale : ne donne pas de conseil personnalisé sur un cas particulier."
+    ),
     "logiciel": (
         "Questions sur un logiciel, une bibliothèque, une API ou un outil informatique :\n"
         "- Cherche d'abord les sources officielles du projet : documentation officielle, notes de version\n"

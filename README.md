@@ -119,9 +119,11 @@ Avec Claude Code : `claude mcp add 304notmodified -e NM304_URL=http://localhost:
 
 Ces durées se règlent dans `app/config.py`.
 
-**Premier domaine : `logiciel`.** Pour ces questions, le chercheur privilégie les sources
-officielles (documentation, notes de version, guides de migration, registres de paquets) et
-indique la version concernée (`DOMAIN_GUIDANCE` dans `app/config.py`).
+**Premier domaine : `reglementation`**, obligations des entreprises en France puis dans l'UE, en
+commençant par la facturation électronique. Le chercheur s'appuie d'abord sur les sources
+officielles (Légifrance, EUR-Lex, impots.gouv.fr, BOFiP, service-public.fr…), vérifie les reports
+récents et reste sur de l'information générale (`DOMAIN_GUIDANCE` dans `app/config.py`).
+Des questions de référence pour tester le service : [`docs/QUESTIONS_TEST.md`](docs/QUESTIONS_TEST.md).
 
 ## Vérifier avant chaque commit
 

@@ -38,9 +38,10 @@ chacun de son côté. Avec 304NotModified, une seule question aurait suffi.
 **Ce que ça montre** : la mémoire d'un agent date de son entraînement, alors que les logiciels
 changent chaque mois. Tous les agents qui écrivent du code ont ce problème.
 
-*Mise à jour du même jour* : ce besoin est réel, mais **Context7 y répond déjà** (voir §5). Le choix
-de `logiciel` comme premier domaine est donc remis en question. Piste recommandée : la
-réglementation française et européenne (voir §12).
+*Mise à jour du même jour* : ce besoin est réel, mais **Context7 y répond déjà** (voir §5).
+Premier domaine retenu à la place : **la réglementation des entreprises, en commençant par la
+facturation électronique** (voir §12). Le même problème s'y pose : en vérifiant le calendrier de
+l'AI Act, la mémoire de Claude donnait une date déjà reportée (cas n°4 de `CAS_REELS.md`).
 
 Tous ces cas sont notés au fur et à mesure dans [`CAS_REELS.md`](CAS_REELS.md).
 
@@ -243,7 +244,7 @@ Une seule intégration peut produire des centaines de milliers d'appels par mois
 
 1. **Mesurer** : mettre la version d'essai en ligne sur un hébergement peu coûteux, la faire
    tester par quelques agents et relever les chiffres ci-dessus.
-2. **Choisir le premier domaine** d'après les mesures. *En cours : voir §12.* Les candidats : prix et disponibilité,
+2. **Choisir le premier domaine** d'après les mesures. *Fait : réglementation, facturation électronique d'abord (§12), à confirmer par les mesures.* Les candidats : prix et disponibilité,
    versions de logiciels et d'API, informations d'entreprises, réglementation.
 3. **Serveur MCP et bibliothèques**, pour la distribution.
 4. **Paiement par crédits Stripe**, puis x402.
@@ -271,11 +272,17 @@ Une seule intégration peut produire des centaines de milliers d'appels par mois
 
 ## 12. Questions ouvertes
 
-- **Quel premier domaine ?** `logiciel` avait été choisi le 30 septembre 2026, puis remis en question
-  le même jour après la découverte de Context7 (§5). Piste recommandée : **réglementation
-  française et européenne**, car aucun concurrent n'y a été trouvé, une erreur y coûte cher (le prix
-  peut être plus élevé), les règles changent lentement (bon taux de cache) et le fondateur est
-  francophone. Décision à prendre par le propriétaire.
+- ~~Quel premier domaine ?~~ **Décidé le 30 septembre 2026 : la réglementation des entreprises
+  (France d'abord, puis UE), en commençant par la facturation électronique**, obligatoire depuis
+  le 1er septembre 2026 et source de questions pour toutes les entreprises. `logiciel` avait
+  d'abord été choisi, puis écarté le même jour (Context7 l'occupe, §5). Raisons : aucun concurrent
+  trouvé qui vende la réponse finale (l'API Légifrance donne des textes bruts), une erreur coûte
+  cher (prix plus élevé possible), les règles changent sans changer chaque jour (bon taux de cache),
+  le fondateur est francophone et en France.
+  Clients visés : éditeurs de logiciels de comptabilité, paie, RH et juridique qui ajoutent des
+  agents, cabinets d'expertise comptable.
+  **Limite à respecter** : information générale sourcée, jamais de conseil juridique personnalisé
+  (activité réservée en France). À faire valider par un avocat avant le lancement commercial.
 - Quel prix par requête, et une offre « réponse garantie » plus chère ?
 - Comment trouver les 10 premiers agents ou développeurs utilisateurs ?
 - À partir de quel volume passer de SQLite à une base plus robuste ?

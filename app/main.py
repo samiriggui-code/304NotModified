@@ -31,6 +31,8 @@ LLMS_TXT = f"""# 304NotModified (version d'essai)
 
 > Réponses factuelles vérifiées, sourcées et datées, partagées entre agents.
 > Une question déjà résolue par un autre agent est servie immédiatement depuis le cache.
+> Spécialité : obligations réglementaires des entreprises (France, puis UE), à commencer par la
+> facturation électronique. Information générale sourcée, pas de conseil juridique personnalisé.
 
 ## Utilisation
 POST /v1/answer

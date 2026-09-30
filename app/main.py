@@ -31,9 +31,11 @@ LLMS_TXT = f"""# 304NotModified (version d'essai)
 
 > Réponses factuelles vérifiées, sourcées et datées, partagées entre agents.
 > Une question déjà résolue par un autre agent est servie immédiatement depuis le cache.
-> Spécialité : l'intégration technique de la facturation électronique française (formats Factur-X,
-> UBL, CII, normes AFNOR XP Z12-012/013/014, API des plateformes agréées, annuaire, statuts de
-> cycle de vie, e-reporting, Peppol), avec la version à jour des spécifications.
+> Spécialité : la facturation électronique française sous tous ses aspects (domaine « facturation ») :
+> réglementation (qui, quand, obligations), technique (Factur-X, UBL, CII, normes AFNOR XP Z12-012/013/014),
+> intégration (API des plateformes agréées, annuaire, Peppol) et process (statuts de cycle de vie,
+> rejets, avoirs, e-reporting, archivage). Toujours avec la version et la date des sources officielles.
+> Information générale : pas de conseil juridique ou fiscal personnalisé.
 
 ## Utilisation
 POST /v1/answer

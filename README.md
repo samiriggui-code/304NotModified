@@ -119,11 +119,13 @@ Avec Claude Code : `claude mcp add 304notmodified -e NM304_URL=http://localhost:
 
 Ces durées se règlent dans `app/config.py`.
 
-**Premier domaine : `facturation`**, l'intégration technique de la facturation électronique
-française (formats, normes AFNOR XP Z12-012/013/014, API des plateformes agréées, annuaire,
-statuts, e-reporting, Peppol). Le chercheur s'appuie d'abord sur les documents officiels
-(impots.gouv.fr, AIFE, AFNOR, FNFE-MPE, EN 16931, OpenPeppol), donne toujours la version et la date
-du document de référence et signale les contradictions (`DOMAIN_GUIDANCE` dans `app/config.py`).
+**Premier domaine : `facturation`**, la facturation électronique française sous tous ses
+aspects : réglementation (qui, quand, obligations), technique (formats, normes AFNOR, versions),
+intégration (API des plateformes agréées, annuaire, Peppol) et process (statuts, rejets, avoirs,
+e-reporting, archivage). Le chercheur s'appuie d'abord sur les sources officielles (impots.gouv.fr,
+BOFiP, Légifrance, AIFE, AFNOR, FNFE-MPE, EN 16931, OpenPeppol), donne toujours les dates et
+versions, signale les contradictions et reste sur de l'information générale
+(`DOMAIN_GUIDANCE` dans `app/config.py`).
 Des questions de référence pour tester le service : [`docs/QUESTIONS_TEST.md`](docs/QUESTIONS_TEST.md).
 
 ## Vérifier avant chaque commit

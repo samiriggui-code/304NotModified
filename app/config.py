@@ -10,31 +10,36 @@ DOMAIN_TTL_SECONDS = {
     "logiciel": 86400,  # versions, API, bibliothèques
     "entreprise": 86400,  # coordonnées, horaires, activité d'une entreprise
     "reglementation": 7 * 86400,  # lois, normes, référentiels
-    # Intégration technique de la facturation électronique (formats, API, normes, plateformes) :
-    # les spécifications et la liste des plateformes agréées bougent souvent pendant le déploiement.
+    # Facturation électronique (réglementation, technique, intégration, process) : les règles, les
+    # spécifications et la liste des plateformes agréées bougent souvent pendant le déploiement.
     "facturation": 86400,
     "general": 86400,
 }
 DEFAULT_DOMAIN = "general"
 
 # Consignes de recherche propres à un domaine, ajoutées à la consigne générale du chercheur.
-# Premier domaine choisi : « facturation », l'intégration technique de la facturation électronique
-# française (voir docs/VISION.md, §12).
+# Premier domaine choisi : « facturation », la facturation électronique française sous tous ses
+# aspects : réglementation, technique, intégration et process (voir docs/VISION.md, §12).
 DOMAIN_GUIDANCE = {
     "facturation": (
-        "Questions techniques sur la facturation électronique française (formats, API, normes, plateformes\n"
-        "agréées, annuaire, statuts de cycle de vie, e-reporting, Peppol, intégration dans un logiciel) :\n"
+        "Questions sur la facturation électronique française, sous tous ses aspects :\n"
+        "réglementation (qui est concerné, dates, obligations, mentions, sanctions), technique (formats\n"
+        "Factur-X, UBL, CII, normes, versions), intégration (API des plateformes agréées, annuaire,\n"
+        "Peppol, connexion d'un logiciel) et process (parcours d'une facture, statuts de cycle de vie,\n"
+        "rejet, litige, avoir, e-reporting, archivage).\n"
         "- Appuie-toi d'abord sur les sources officielles : impots.gouv.fr (spécifications externes B2B,\n"
-        "  liste officielle des plateformes agréées), AIFE (aife.economie.gouv.fr, Chorus Pro), normes AFNOR\n"
-        "  XP Z12-012 (formats et statuts), XP Z12-013 (API entre logiciels et plateformes) et XP Z12-014\n"
-        "  (cas d'usage), FNFE-MPE (Factur-X, annexes, swaggers), norme européenne EN 16931, OpenPeppol.\n"
-        "  Un blog d'éditeur ou de plateforme peut aider à trouver le document, mais ne suffit pas seul.\n"
-        "- Donne toujours le numéro de version et la date de publication du document de référence, et\n"
-        "  vérifie qu'aucune version plus récente n'est sortie. Beaucoup de pages citent une version dépassée.\n"
-        "- Si les sources se contredisent (versions, chiffres, noms), dis-le, indique laquelle fait foi\n"
-        "  et baisse la confiance.\n"
-        "- Réponds de façon technique et précise (noms de champs, codes, flux, routes d'API) quand la\n"
-        "  question le demande."
+        "  liste officielle des plateformes agréées, FAQ), BOFiP, Légifrance, economie.gouv.fr, AIFE\n"
+        "  (aife.economie.gouv.fr, Chorus Pro), normes AFNOR XP Z12-012 (formats et statuts), XP Z12-013\n"
+        "  (API entre logiciels et plateformes) et XP Z12-014 (cas d'usage), FNFE-MPE (Factur-X, annexes,\n"
+        "  swaggers), norme européenne EN 16931, OpenPeppol. Un blog d'éditeur, de plateforme ou de\n"
+        "  cabinet peut aider à trouver le document, mais ne suffit pas seul : sinon, baisse la confiance.\n"
+        "- Donne les dates exactes et qui est concerné pour les obligations ; le numéro de version et la\n"
+        "  date de publication pour les documents techniques. Vérifie qu'aucun report, aucune\n"
+        "  modification ni aucune version plus récente n'est sortie : beaucoup de pages sont dépassées.\n"
+        "- Si les sources se contredisent (dates, versions, chiffres, noms), dis-le, indique laquelle\n"
+        "  fait foi et baisse la confiance.\n"
+        "- Sois technique et précis (champs, codes, flux, routes d'API, étapes) quand la question le demande.\n"
+        "- Reste sur de l'information générale : pas de conseil juridique ou fiscal personnalisé."
     ),
     "reglementation": (
         "Questions sur une obligation réglementaire, fiscale ou sociale des entreprises (France, Union européenne) :\n"

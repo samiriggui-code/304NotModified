@@ -112,3 +112,12 @@ def test_einvoicing_guidance_asks_for_spec_versions():
 
     system = client.requests[0]["system"]
     assert "XP Z12-013" in system and "numéro de version" in system
+
+
+def test_einvoicing_guidance_covers_all_aspects():
+    client = FakeClient([message([NS(type="text", text=FINAL, citations=None)])])
+    ClaudeResolver(client).resolve("Une PME doit-elle émettre des factures électroniques ?", "facturation")
+
+    system = client.requests[0]["system"]
+    for aspect in ("réglementation", "technique", "intégration", "process"):
+        assert aspect in system

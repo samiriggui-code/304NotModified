@@ -39,8 +39,8 @@ chacun de son côté. Avec 304NotModified, une seule question aurait suffi.
 changent chaque mois. Tous les agents qui écrivent du code ont ce problème.
 
 *Mise à jour du même jour* : ce besoin est réel, mais **Context7 y répond déjà** (voir §5).
-Premier domaine retenu à la place : **l'intégration technique de la facturation électronique
-française** (voir §12). Le même problème s'y pose : en cherchant la version en vigueur des normes,
+Premier domaine retenu à la place : **la facturation électronique française, sous tous ses aspects**
+(réglementation, technique, intégration, process ; voir §12). Le même problème s'y pose : en cherchant la version en vigueur des normes,
 des pages sérieuses et récentes se contredisaient (cas n°5 de `CAS_REELS.md`).
 
 Tous ces cas sont notés au fur et à mesure dans [`CAS_REELS.md`](CAS_REELS.md).
@@ -244,7 +244,7 @@ Une seule intégration peut produire des centaines de milliers d'appels par mois
 
 1. **Mesurer** : mettre la version d'essai en ligne sur un hébergement peu coûteux, la faire
    tester par quelques agents et relever les chiffres ci-dessus.
-2. **Choisir le premier domaine** d'après les mesures. *Fait : intégration technique de la facturation électronique (§12), à confirmer par les mesures.* Les candidats : prix et disponibilité,
+2. **Choisir le premier domaine** d'après les mesures. *Fait : facturation électronique, tous aspects (§12), à confirmer par les mesures.* Les candidats : prix et disponibilité,
    versions de logiciels et d'API, informations d'entreprises, réglementation.
 3. **Serveur MCP et bibliothèques**, pour la distribution.
 4. **Paiement par crédits Stripe**, puis x402.
@@ -272,22 +272,29 @@ Une seule intégration peut produire des centaines de milliers d'appels par mois
 
 ## 12. Questions ouvertes
 
-- ~~Quel premier domaine ?~~ **Décidé le 30 septembre 2026 : l'intégration technique de la
-  facturation électronique française** (domaine `facturation`) : formats (Factur-X, UBL, CII),
-  normes AFNOR XP Z12-012/013/014, API des plateformes agréées, annuaire, statuts de cycle de
-  vie, e-reporting, Peppol.
+- ~~Quel premier domaine ?~~ **Décidé le 30 septembre 2026 : la facturation électronique française,
+  sous tous ses aspects** (domaine `facturation`) :
+  - **réglementation** : qui est concerné, à partir de quand, obligations, mentions, sanctions ;
+  - **technique** : formats (Factur-X, UBL, CII), normes AFNOR XP Z12-012/013/014, versions ;
+  - **intégration** : API des plateformes agréées, annuaire, Peppol, connexion d'un logiciel ;
+  - **process** : parcours d'une facture, statuts de cycle de vie, rejets, litiges, avoirs,
+    e-reporting, archivage.
   Pourquoi : la réforme est entrée en vigueur le 1er septembre 2026 et toutes les entreprises
-  sont concernées ; les éditeurs de logiciels doivent tous se brancher sur des plateformes
-  agréées ; les spécifications changent souvent (nouvelles versions des trois normes AFNOR le
-  30 juin 2026) et les pages répandues se contredisent (cas n°5 de `CAS_REELS.md`). C'est
-  exactement ce que 304NotModified résout : la bonne version, avec sa source officielle, à jour.
+  sont concernées ; tout le monde se pose des questions, du dirigeant au développeur ; les règles
+  et les spécifications changent souvent (nouvelles versions des trois normes AFNOR le 30 juin
+  2026) et les pages répandues se contredisent (cas n°5 de `CAS_REELS.md`). C'est exactement ce
+  que 304NotModified résout : la bonne réponse, avec sa source officielle, à jour.
   Clients visés : éditeurs de logiciels (comptabilité, gestion, ERP, caisse), intégrateurs et
-  ESN, développeurs de « solutions compatibles », et leurs agents qui écrivent du code.
-  Choix précédents écartés le même jour : `logiciel` en général (Context7 l'occupe, §5), puis la
-  réglementation juridique (risque de conseil juridique, et moins utile aux développeurs).
-  **À surveiller** : Context7 pourrait indexer une partie de ces documents (les swaggers par
-  exemple) ; notre différence est la réponse finale sur des documents officiels dispersés
-  (PDF, Excel, zip sur impots.gouv, AFNOR, FNFE-MPE), avec la version et la date.
+  ESN, « solutions compatibles », plateformes agréées elles-mêmes (pour leurs agents de support),
+  cabinets d'expertise comptable, et les agents de tous ces acteurs.
+  `logiciel` en général avait d'abord été choisi, puis écarté le même jour (Context7 l'occupe, §5).
+  **Limite à respecter** : information générale sourcée, pas de conseil juridique ou fiscal
+  personnalisé (activité réservée en France) ; à faire valider par un avocat avant le lancement
+  commercial.
+  **À surveiller** : Context7 pourrait indexer une partie des documents techniques (les swaggers
+  par exemple) ; notre différence est la réponse finale, sur tous les aspects à la fois, à partir
+  de documents officiels dispersés (PDF, Excel, zip sur impots.gouv, AFNOR, FNFE-MPE), avec la
+  version et la date.
 - Quel prix par requête, et une offre « réponse garantie » plus chère ?
 - Comment trouver les 10 premiers agents ou développeurs utilisateurs ?
 - À partir de quel volume passer de SQLite à une base plus robuste ?

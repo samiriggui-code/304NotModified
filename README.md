@@ -7,6 +7,7 @@ immédiatement depuis le cache ; sinon, le service fait la recherche une seule f
 la garde pour les suivants.
 
 - Vision complète, marché, modèle économique, risques : [`docs/VISION.md`](docs/VISION.md)
+- Mise en ligne sur le VPS : [`docs/DEPLOIEMENT.md`](docs/DEPLOIEMENT.md)
 - Journal des cas réels : [`docs/CAS_REELS.md`](docs/CAS_REELS.md)
 - Consignes pour Claude : [`CLAUDE.md`](CLAUDE.md)
 
@@ -142,5 +143,7 @@ mcp_server/
   server.py      Serveur MCP : outil `ask` qui relaie vers l'API
 tests/           Tests automatisés
 docs/VISION.md   Vision, marché, modèle économique, feuille de route
+deploy/          Scripts d'installation et de mise à jour du VPS
+docs/DEPLOIEMENT.md  Mise en ligne pas à pas
 docs/CAS_REELS.md  Journal des cas réels : les problèmes que le service doit résoudre
 ```

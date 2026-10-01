@@ -5,7 +5,7 @@ import secrets
 import sqlite3
 import threading
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS answers (
@@ -74,8 +74,14 @@ CREATE TABLE IF NOT EXISTS idempotency (
 
 
 # Colonnes ajoutées après la première version : créées au démarrage si la base est ancienne.
+_FACT_COLUMNS = {
+    "claims": "TEXT",  # JSON : faits de la réponse, chacun avec les URL qui le justifient
+    "valid_from": "TEXT",  # AAAA-MM-JJ : début d'application du fait décrit, si connu
+    "valid_until": "TEXT",  # AAAA-MM-JJ : fin d'application connue, si connue
+}
 MIGRATIONS = {
-    "answers": {"version_id": "INTEGER"},
+    "answers": {"version_id": "INTEGER", **_FACT_COLUMNS},
+    "answer_versions": dict(_FACT_COLUMNS),
     "requests": {
         "request_id": "TEXT",
         "channel": "TEXT",  # http | mcp
@@ -104,6 +110,9 @@ class CachedAnswer:
     created_at: float
     expires_at: float
     version_id: int | None = None
+    claims: list[dict] = field(default_factory=list)
+    valid_from: str | None = None
+    valid_until: str | None = None
 
 
 class Store:
@@ -223,18 +232,23 @@ class Store:
             answer.confidence,
             answer.created_at,
             answer.expires_at,
+            json.dumps(answer.claims, ensure_ascii=False),
+            answer.valid_from,
+            answer.valid_until,
         )
         with self._lock:
             version_id = self._db.execute(
                 """INSERT INTO answer_versions
-                   (key, question, domain, answer, sources, confidence, created_at, expires_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                   (key, question, domain, answer, sources, confidence, created_at, expires_at,
+                    claims, valid_from, valid_until)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 values,
             ).lastrowid
             self._db.execute(
                 """INSERT OR REPLACE INTO answers
-                   (key, question, domain, answer, sources, confidence, created_at, expires_at, version_id)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   (key, question, domain, answer, sources, confidence, created_at, expires_at,
+                    claims, valid_from, valid_until, version_id)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (*values, version_id),
             )
             self._db.commit()
@@ -595,4 +609,7 @@ def _to_answer(row: sqlite3.Row) -> CachedAnswer:
         created_at=row["created_at"],
         expires_at=row["expires_at"],
         version_id=row["version_id"],
+        claims=json.loads(row["claims"]) if row["claims"] else [],
+        valid_from=row["valid_from"],
+        valid_until=row["valid_until"],
     )

@@ -63,7 +63,10 @@ même réponse, sans nouvelle recherche ni nouveau décompte).
 Réponse : status (answered | unanswered), request_id, answer, sources [url, title], confidence (0-1),
 domain, cached (bool), fetched_at et expires_at (horodatages Unix), billable (décomptée ou non),
 official_sources (nombre de sources officielles du domaine : Légifrance, impots.gouv.fr… ; null si le
-domaine n'en a pas de liste ; 0 = seulement des sites tiers, confidence alors plafonnée à 0,5).
+domaine n'en a pas de liste ; 0 = seulement des sites tiers, confidence alors plafonnée à 0,5),
+claims (chaque fait de la réponse avec les URL qui le justifient : [{{"text", "sources"}}]),
+valid_from et valid_until (AAAA-MM-JJ, période où le fait s'applique, null si inconnue) et in_force
+(true, false si la règle n'est pas encore ou plus applicable, null sans date).
 Sans réponse : reason (search_disabled, no_reliable_answer, no_source, refused, parse_error, timeout,
 provider_error, busy, internal_error), message, retryable et retry_after (secondes). Ne relancez que
 si retryable vaut true ; les questions sans réponse ne sont jamais décomptées.

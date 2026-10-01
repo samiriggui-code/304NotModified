@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import time
+from datetime import UTC, datetime
 from typing import Literal
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Response
@@ -25,6 +26,7 @@ from .resolver import (
     FallbackResolver,
     NullResolver,
     OpenRouterResolver,
+    Resolution,
     Resolver,
     official_source_count,
 )
@@ -383,7 +385,10 @@ def create_app(store: Store | None = None, resolver: Resolver | None = None) -> 
             sources=resolution.sources,
             confidence=resolution.confidence,
             created_at=now,
-            expires_at=now + config.DOMAIN_TTL_SECONDS[resolution.domain],
+            expires_at=_expiry(now, config.DOMAIN_TTL_SECONDS[resolution.domain], resolution),
+            claims=resolution.claims,
+            valid_from=resolution.valid_from,
+            valid_until=resolution.valid_until,
         )
         store.put(fresh)
         store.consume(api_key)
@@ -534,6 +539,31 @@ def create_app(store: Store | None = None, resolver: Resolver | None = None) -> 
     return app
 
 
+def _day_start(iso_day: str) -> float:
+    return datetime.fromisoformat(iso_day).replace(tzinfo=UTC).timestamp()
+
+
+def _expiry(now: float, ttl: float, resolution: Resolution) -> float:
+    """Durée de garde en mémoire : celle du domaine, raccourcie si le fait change de statut avant.
+
+    Une règle « applicable à partir du 1er novembre » est recherchée à nouveau ce jour-là (la réponse
+    parlait d'une règle à venir) ; une valeur qui cesse de s'appliquer n'est pas resservie au-delà."""
+    expires = now + ttl
+    for day in (resolution.valid_from, resolution.valid_until):
+        if day and now < _day_start(day) < expires:
+            expires = _day_start(day)
+    return expires
+
+
+def _in_force(a: CachedAnswer, now: float) -> bool | None:
+    """Le fait décrit s'applique-t-il aujourd'hui ? None si la réponse ne donne aucune date."""
+    if not (a.valid_from or a.valid_until):
+        return None
+    if a.valid_from and now < _day_start(a.valid_from):
+        return False
+    return not (a.valid_until and now >= _day_start(a.valid_until))
+
+
 def _payload(a: CachedAnswer, *, cached: bool, request_id: str) -> dict:
     official = official_source_count(a.domain, a.sources)
     confidence = a.confidence
@@ -551,6 +581,12 @@ def _payload(a: CachedAnswer, *, cached: bool, request_id: str) -> dict:
         # Nombre de sources officielles du domaine (Légifrance, impots.gouv.fr…) ; null si le domaine n'en
         # a pas de liste. 0 : seulement des sites tiers, à vérifier avant de s'y fier.
         "official_sources": official,
+        # Chaque fait de la réponse avec les URL qui le justifient : vérifiable phrase par phrase.
+        "claims": a.claims,
+        # Période où le fait s'applique (AAAA-MM-JJ, null si inconnue) et s'il s'applique aujourd'hui.
+        "valid_from": a.valid_from,
+        "valid_until": a.valid_until,
+        "in_force": _in_force(a, time.time()),
         "cached": cached,
         "fetched_at": a.created_at,
         "expires_at": a.expires_at,

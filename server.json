@@ -2,8 +2,8 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "com.304notfound/304notmodified",
   "title": "304NotModified",
-  "description": "Sourced, dated answers for agents (FR/EU rules, e-invoicing, Qualiopi) + market math on your data",
-  "version": "0.3.0",
+  "description": "Sourced answers on FR/EU rules + French company search (SIREN, NAF) for agents, quoted and budgeted",
+  "version": "0.4.0",
   "websiteUrl": "https://304notfound.com",
   "remotes": [
     {

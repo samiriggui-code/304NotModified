@@ -8,6 +8,7 @@ python -m app.cli hash-password            # affiche seulement l'empreinte, à r
 
 import getpass
 import os
+import secrets
 import sys
 import tempfile
 from pathlib import Path
@@ -63,6 +64,19 @@ def main(argv: list[str]) -> int:
             return 1
         set_env_value(path, "ADMIN_PASSWORD_HASH", hash_password(password))
         print(f"Mot de passe changé dans {path}. Redémarrez l'API pour qu'il soit pris en compte.")
+        return 0
+    if command == ["reset-admin"]:
+        # Sans saisie : génère un mot de passe, enregistre son empreinte (et l'e-mail s'il est donné),
+        # puis l'affiche une seule fois. Utilisé par deploy/reset-admin.sh.
+        path = Path(argv[1] if len(argv) > 1 else ".env")
+        if path.exists() and not os.access(path, os.W_OK):
+            print(f"Impossible d'écrire dans {path} : relancez avec sudo.", file=sys.stderr)
+            return 1
+        if len(argv) > 2:
+            set_env_value(path, "ADMIN_EMAIL", argv[2].strip().lower())
+        password = secrets.token_urlsafe(15)
+        set_env_value(path, "ADMIN_PASSWORD_HASH", hash_password(password))
+        print(password)
         return 0
     print(__doc__.strip())
     return 1

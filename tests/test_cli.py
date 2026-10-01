@@ -23,3 +23,16 @@ def test_set_password_refuses_short_or_different(tmp_path, monkeypatch):
         monkeypatch.setattr(cli.getpass, "getpass", lambda prompt, it=it: next(it))
         assert cli.main(["set-password", str(env)]) == 1
     assert env.read_text() == "ADMIN_PASSWORD_HASH='ancienne'\n"
+
+
+def test_reset_admin_generates_a_password_without_typing(tmp_path, capsys):
+    env = tmp_path / ".env"
+    env.write_text("ADMIN_EMAIL='ancien@exemple.fr'\nSESSION_SECRET='s'\n")
+
+    assert cli.main(["reset-admin", str(env), "Moi@Exemple.fr"]) == 0
+
+    password = capsys.readouterr().out.strip()
+    values = dict(line.split("=", 1) for line in env.read_text().splitlines())
+    assert values["ADMIN_EMAIL"] == "'moi@exemple.fr'" and values["SESSION_SECRET"] == "'s'"
+    assert len(password) >= 16
+    assert admin_auth.verify_password(password, values["ADMIN_PASSWORD_HASH"].strip("'"))

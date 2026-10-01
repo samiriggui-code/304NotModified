@@ -81,8 +81,7 @@ sudo bash /opt/304notmodified/deploy/update.sh
 ## Changer le mot de passe du tableau de bord
 
 ```bash
-cd /opt/304notmodified && sudo -u nm304 .venv/bin/python -m app.cli hash-password
-sudo nano /etc/304notmodified.env        # remplacer ADMIN_PASSWORD_HASH='…' par la nouvelle empreinte
+cd /opt/304notmodified && sudo .venv/bin/python -m app.cli set-password /etc/304notmodified.env
 sudo systemctl restart 304notmodified
 ```
 

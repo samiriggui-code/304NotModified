@@ -20,7 +20,7 @@ la garde pour les suivants.
 python3 -m venv .venv
 .venv/bin/pip install -r requirements-dev.txt
 cp .env.example .env   # puis remplir ADMIN_EMAIL, ADMIN_PASSWORD_HASH, SESSION_SECRET (et ANTHROPIC_API_KEY)
-.venv/bin/python -m app.cli hash-password   # produit l'empreinte pour ADMIN_PASSWORD_HASH
+.venv/bin/python -m app.cli set-password .env   # écrit l'empreinte du mot de passe dans .env
 ```
 
 Sans `ANTHROPIC_API_KEY`, le service tourne quand même : les questions sont enregistrées comme
@@ -176,7 +176,7 @@ cd admin && npm run typecheck && npm run lint && NEXT_PUBLIC_BASE_PATH=/admin np
 app/
   main.py        API (FastAPI) : routes des agents (/v1) et routes internes (/internal)
   admin_auth.py  Connexion du propriétaire : mot de passe (scrypt), sessions signées
-  cli.py         python -m app.cli hash-password
+  cli.py         python -m app.cli set-password (change le mot de passe)
   store.py       SQLite : cache, journal des requêtes, clés d'API
   resolver.py    Recherche fraîche via Claude + recherche web
   normalize.py   Normalisation des questions

@@ -1,7 +1,7 @@
 """Connexion du propriétaire au tableau de bord : e-mail + mot de passe, jeton de session signé.
 
 - Le mot de passe n'est jamais stocké : seulement son empreinte scrypt (ADMIN_PASSWORD_HASH),
-  produite par `python -m app.cli hash-password`.
+  produite par `python -m app.cli set-password`.
 - Le jeton de session est signé (HMAC-SHA256 avec SESSION_SECRET) et expire : aucune table de
   sessions à gérer. Changer SESSION_SECRET déconnecte tout le monde.
 - Après plusieurs échecs, la connexion est bloquée un moment (protection contre les essais en rafale).

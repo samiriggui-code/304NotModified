@@ -36,7 +36,7 @@ app/                 Service pour les agents (FastAPI, SQLite)
   store.py           SQLite : answers, answer_versions, requests, feedback, api_keys
   resolver.py        recherche fraîche : Claude + web_search côté serveur, consignes par domaine
   config.py          domaines (fraîcheur), DOMAIN_GUIDANCE, prix, rétention (365 j)
-  cli.py             python -m app.cli hash-password
+  cli.py             python -m app.cli set-password (change le mot de passe)
 mcp_server/server.py Serveur MCP (kit mcp 2.x, stdio) : outils ask et feedback → API
 admin/               Tableau de bord du propriétaire : Next.js 16 + socle Metronic 9.5 (concept CRM,
                      repris de gsms-qualiopi/frontend), servi sous /admin (basePath)
@@ -63,7 +63,7 @@ Prérequis : Python 3.11+, Node.js 22.
 python -m venv .venv
 .venv/bin/pip install -r requirements-dev.txt
 cp .env.example .env
-.venv/bin/python -m app.cli hash-password        # → mettre l'empreinte dans ADMIN_PASSWORD_HASH='…'
+.venv/bin/python -m app.cli set-password .env      # choisit le mot de passe (empreinte écrite dans .env)
 # remplir aussi ADMIN_EMAIL et SESSION_SECRET (texte aléatoire long) dans .env
 set -a; . ./.env; set +a                          # Windows PowerShell : définir les variables à la main
 .venv/bin/uvicorn app.main:app --port 8304

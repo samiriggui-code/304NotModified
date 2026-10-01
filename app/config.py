@@ -138,7 +138,7 @@ DOMAIN_GUIDANCE = {
 
 DB_PATH = os.environ.get("NM304_DB", "304notmodified.sqlite3")
 # Accès administrateur. ADMIN_TOKEN : jeton fixe pour les scripts (facultatif).
-# Tableau de bord : ADMIN_EMAIL + ADMIN_PASSWORD_HASH (python -m app.cli hash-password) ;
+# Tableau de bord : ADMIN_EMAIL + ADMIN_PASSWORD_HASH (python -m app.cli set-password) ;
 # SESSION_SECRET signe les jetons de session (le changer déconnecte tout le monde).
 ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN", "")
 ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "").strip().lower()

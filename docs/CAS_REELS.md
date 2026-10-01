@@ -254,3 +254,44 @@
 - **Réponse attendue de 304** : « Pas tel quel : sur son propre banc d'essai, le réglage par défaut
   réutilise à tort plus d'une fois sur deux. La version fiable (JEV) dépend d'une API payante d'un
   tiers, et la dernière version publiée sur PyPI date d'août 2024. »
+
+## 15. Données Binance : indicateurs calculés non revendables (conditions publiées le 30/09/2026)
+
+- **Date** : 1er octobre 2026
+- **Domaine** : `reglementation` (conditions d'usage de données de marché)
+- **Question** : « Peut-on vendre à des agents des indicateurs (Ichimoku, volume relatif…) calculés sur
+  les données gratuites de Binance (`data.binance.vision`, `data-api.binance.vision`) ? »
+- **Ce qui s'est passé** : l'idée était de vendre via 304 les calculs du moteur IchiVol, qui lit les
+  données gratuites de Binance. Les conditions générales de Binance n'étaient connues que par des
+  résumés ; un fichier `TERMS_AND_CONDITIONS.md` (version du 26 août 2026) a été ajouté le
+  30 septembre 2026 au dépôt officiel `binance/binance-public-data`. Il tranche : licence
+  CC BY-NC-SA 4.0, non commerciale.
+- **Source de la bonne réponse** :
+  https://github.com/binance/binance-public-data/blob/master/TERMS_AND_CONDITIONS.md : §2.4 (les
+  « derivative analytical indicators » sont couverts), §3.4 (usage commercial = licence écrite),
+  §4.2 (pas de « signal distribution to third parties for direct or indirect compensation »), §4.3
+  et §4.4 (pas de revente de flux dérivés, pas de produits financiers commerciaux ni de plateformes de
+  robots de trading commerciales), §4.1 (permis : recherche, enseignement, tests personnels).
+- **Réponse attendue de 304** : « Non, sans licence commerciale écrite de Binance : depuis la
+  publication de ses conditions de données (version du 26/08/2026), les indicateurs calculés sur
+  ses données gratuites sont couverts par une licence non commerciale (CC BY-NC-SA 4.0) qui
+  interdit de les vendre ou de les distribuer contre rémunération. Usage personnel et recherche :
+  autorisés. »
+
+## 16. CoinGecko : une formule payante ne permet pas de revendre des indicateurs dérivés
+
+- **Date** : 1er octobre 2026
+- **Domaine** : `reglementation` (conditions d'usage de données de marché)
+- **Question** : « Avec une formule payante de l'API CoinGecko, peut-on vendre à des tiers des
+  indicateurs calculés sur ses données ? »
+- **Ce qui s'est passé** : CoinGecko était l'alternative évidente à Binance. Ses conditions
+  autorisent bien un produit payant qui *intègre* l'API, mais interdisent de redistribuer et de
+  dériver les données : vendre des indicateurs calculés à d'autres agents reste exclu.
+- **Source de la bonne réponse** : https://www.coingecko.com/en/api_terms (version du 5 septembre
+  2025) : §4.1.6 (« entitled to charge for your services and products that incorporate […] our
+  CoinGecko API », mais pas de « re-distribute or syndicate access ») ; §6.2 (« not allowed to
+  […] derive from […] any Data ») ; §4.3 (mention « Powered by CoinGecko » obligatoire).
+- **Réponse attendue de 304** : « Pas sans accord spécifique : la formule payante permet un produit
+  commercial qui intègre l'API, mais pas de redistribuer ni de dériver les données ; un indicateur
+  calculé vendu à des tiers entre dans l'interdiction (§4.1.6, §6.2). Il faut une licence de
+  redistribution négociée. »

@@ -6,6 +6,7 @@ journalisée comme « sans réponse », ce qui mesure quand même la demande.
 """
 
 import json
+import logging
 import re
 from dataclasses import dataclass, field
 from datetime import date
@@ -15,6 +16,8 @@ from urllib.parse import urlparse
 import httpx
 
 from . import config
+
+log = logging.getLogger("304notmodified")
 
 DOMAINS = sorted(config.DOMAIN_TTL_SECONDS)
 
@@ -30,8 +33,9 @@ Termine ta réponse par un unique objet JSON, sans texte après, de la forme :
 - domain : l'une de ces valeurs : {", ".join(DOMAINS)}.
 - confidence : entre 0 et 1. Baisse-la si les sources se contredisent, sont anciennes ou uniques.
 - sources : les pages qui justifient réellement la réponse.
-- claims : chaque fait de la réponse (date, chiffre, obligation, version…), une phrase par fait,
-  avec les URL de « sources » qui le justifient. Un fait sans URL qui le justifie n'a pas sa place.
+- claims : les faits de la réponse (date, chiffre, obligation, version…), une phrase courte par
+  fait, 8 au plus, avec les URL de « sources » qui le justifient. Un fait sans URL n'a pas sa place.
+  Le JSON final doit rester court : c'est lui qui est lu, le texte qui le précède ne l'est pas.
 - valid_from : date (AAAA-MM-JJ) à partir de laquelle la règle ou la valeur décrite s'applique, si
   elle est connue et pertinente (ex. entrée en vigueur) ; sinon null.
 - valid_until : date (AAAA-MM-JJ) à laquelle elle cesse de s'appliquer ou sera remplacée, si une
@@ -171,7 +175,9 @@ class OpenRouterResolver:
             "model": config.OPENROUTER_MODEL,
             "messages": [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": user}],
             "plugins": [{"id": "web", "max_results": config.OPENROUTER_WEB_MAX_RESULTS}],
-            "max_tokens": 4000,
+            # 4 000 coupait le JSON final dès que la réponse détaille ses faits (01/10/2026 : deux
+            # recherches payées puis perdues en parse_error) ; même plafond que le moteur Anthropic.
+            "max_tokens": 16000,
         }
         try:
             response = self._http.post(self.URL, json=body, headers=self._headers)
@@ -197,7 +203,11 @@ class OpenRouterResolver:
             for a in message.get("annotations") or []
             if isinstance(a, dict) and a.get("type") == "url_citation" and isinstance(a.get("url_citation"), dict)
         ]
-        return _resolution_from_text(message.get("content") or "", citations, domain_hint, cost)
+        resolution = _resolution_from_text(message.get("content") or "", citations, domain_hint, cost)
+        if resolution.reason == "parse_error":
+            # Réponse payée mais inexploitable : la cause (souvent « length », réponse coupée) est gardée.
+            log.warning("OpenRouter : réponse inexploitable, finish_reason=%s", choice.get("finish_reason"))
+        return resolution
 
 
 class FallbackResolver:

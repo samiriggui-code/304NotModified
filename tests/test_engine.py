@@ -345,6 +345,21 @@ def test_openrouter_answer_uses_citations_and_real_cost():
     assert seen["body"]["model"] == config.OPENROUTER_MODEL and seen["body"]["plugins"][0]["id"] == "web"
 
 
+def test_openrouter_leaves_room_for_the_final_json_and_logs_cut_answers(caplog):
+    seen = {}
+
+    def handler(request):
+        seen["body"] = json.loads(request.content)
+        # Réponse coupée avant la fin du JSON (cas réel du 01/10/2026 avec max_tokens 4000).
+        return httpx.Response(200, json=_completion('Analyse… {"answer": "Oui, en principe', finish="length"))
+
+    with caplog.at_level("WARNING", logger="304notmodified"):
+        resolution = _openrouter(handler).resolve("Q ?", None)
+    assert seen["body"]["max_tokens"] >= 16000
+    assert resolution.reason == "parse_error" and resolution.cost_eur > 0
+    assert "finish_reason=length" in caplog.text
+
+
 def test_openrouter_without_source_abstains():
     text = '{"answer": "oui", "domain": "general", "confidence": 0.9, "sources": []}'
     resolution = _openrouter(lambda r: httpx.Response(200, json=_completion(text))).resolve("Q ?", None)

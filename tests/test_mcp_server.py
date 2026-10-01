@@ -36,7 +36,7 @@ def test_tool_is_listed_as_read_only(api):
             return (await client.list_tools()).tools
 
     tools = {t.name: t for t in anyio.run(run)}
-    assert set(tools) == {"ask", "feedback", "calculate"}
+    assert set(tools) == {"ask", "feedback", "calculate", "list_services", "quote_service", "run_service"}
     assert tools["ask"].annotations.read_only_hint is True
     assert tools["calculate"].annotations.read_only_hint is True
 

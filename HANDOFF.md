@@ -3,6 +3,14 @@
 > Passation du 30 septembre 2026 (fin de la session cloud, passage en mode local).
 > À lire en premier par la prochaine session de Claude, avec `CLAUDE.md` et `docs/VISION.md`.
 
+## 0bis. Catalogue de services (1er octobre 2026, soir, pas encore en production)
+
+`/v1/services` : catalogue, devis ferme, budget (`max_price_eur`, plafond 24 h par clé), exécution,
+contrôle du schéma, facturation seulement si `completed`, coûts par étape dans `/internal/stats`.
+Premier service `fr-suppliers` (API officielle Recherche d'entreprises, gratuite) ; adaptateurs Jev
+(branché, sans clé) et Apify (prêt, aucun Actor). Outils MCP `list_services`, `quote_service`,
+`run_service`. Tout est dans `docs/INTEGRATION_APIFY_JEV_LLM.md` ; cas réels 17 et 18.
+
 ## 0. Reprise prévue (1er octobre 2026) : trois chantiers à mener ensemble
 
 État en production (VPS Hostinger, `/opt/304notmodified`, commit `3f8cef1`) : moteur OpenRouter

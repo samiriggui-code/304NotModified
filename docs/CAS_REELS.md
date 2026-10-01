@@ -295,3 +295,40 @@
   commercial qui intègre l'API, mais pas de redistribuer ni de dériver les données ; un indicateur
   calculé vendu à des tiers entre dans l'interdiction (§4.1.6, §6.2). Il faut une licence de
   redistribution négociée. »
+
+## 17. API Apify : le chemin documenté est `/v2/actors/`, plus `/v2/acts/`
+
+- **Date** : 1er octobre 2026
+- **Domaine** : `logiciel`
+- **Question** : « Quelle est l'URL actuelle pour lancer un Actor Apify par API, et comment lire son coût ? »
+- **Ce qui s'est passé** : en écrivant l'adaptateur Apify, Claude comptait utiliser
+  `POST /v2/acts/{actorId}/runs`, comme dans sa mémoire. La documentation à jour donne
+  `POST https://api.apify.com/v2/actors/:actorId/runs` (et `…/actors/:actorId/run-sync-get-dataset-items`) ;
+  l'ancienne page de documentation (`act-run-sync-get-dataset-items-post`) redirige vers la nouvelle
+  (`actor-run-sync-get-dataset-items-post`). Le coût réel d'une exécution se lit dans le champ
+  `usageTotalUsd` de l'objet exécution ; `waitForFinish` vaut 60 s au plus ; l'appel synchrone renvoie
+  408 au-delà de 300 s. Le maintien de l'ancien chemin `/acts/` n'a pas été vérifié.
+- **Source de la bonne réponse** : https://docs.apify.com/api/v2/actors-runs-post et
+  https://docs.apify.com/api/v2/actor-run-get (lues le 01/10/2026).
+- **Réponse attendue de 304** : « `POST https://api.apify.com/v2/actors/{actorId}/runs` avec
+  `Authorization: Bearer <jeton>` ; plafonds `maxTotalChargeUsd` et `maxItems` en paramètres ; coût
+  réel dans `usageTotalUsd` de l'exécution (GET `/v2/actor-runs/{runId}`). »
+
+## 18. API Recherche d'entreprises : `q` ne cherche pas dans l'activité, et le département vise les établissements
+
+- **Date** : 1er octobre 2026
+- **Domaine** : `entreprise`
+- **Question** : « Comment trouver, par l'API Recherche d'entreprises, les entreprises d'une activité
+  donnée dans un département ? »
+- **Ce qui s'est passé** : premier essai réel du service `fr-suppliers`. « traiteur evenementiel » dans
+  le Rhône : **0 résultat**, car `q` ne cherche que dans la dénomination, l'adresse et les personnes ;
+  avec le code NAF 56.21Z : **1 271** entreprises. Et avec un filtre sur les Hauts-de-France, les
+  premiers résultats avaient leur siège à Saint-Mandé ou à Pessac : le filtre `departement` porte sur
+  les établissements, pas sur le siège (l'établissement trouvé est dans `matching_etablissements`).
+  L'API renvoie aussi, à côté du code NAF rév. 2, un code NAF 2025 (`activite_principale_naf25`,
+  ex. 17.21A → 17.21Y).
+- **Source de la bonne réponse** : https://recherche-entreprises.api.gouv.fr/docs/ (description des
+  paramètres `q`, `activite_principale`, `departement`) et les réponses de l'API du 01/10/2026.
+- **Réponse attendue de 304** : « Filtrer par `activite_principale` (code NAF) plutôt que par mots-clés,
+  et lire `matching_etablissements` : le filtre géographique s'applique aux établissements, le siège
+  peut être ailleurs. 7 appels par seconde au plus, 25 résultats par page. »

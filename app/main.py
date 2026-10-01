@@ -20,6 +20,8 @@ from .aliases import CONTEXT_ALIASES, DOMAIN_ALIASES, QUESTION_ALIASES
 from .calc.routes import register_calc_routes
 from .engine import SearchCoordinator
 from .normalize import question_key
+from .providers.jev import JevClassifier
+from .providers.recherche_entreprises import RechercheEntreprises
 from .public import home_page, llms_text, robots_text, sitemap_xml
 from .resolver import (
     REASONS,
@@ -32,6 +34,8 @@ from .resolver import (
     Resolver,
     official_source_count,
 )
+from .services import ServiceSpec, suppliers_fr
+from .services.routes import register_service_routes
 from .store import CachedAnswer, Store
 
 log = logging.getLogger("304notmodified")
@@ -153,11 +157,20 @@ def default_resolver() -> Resolver:
     return engines[0] if len(engines) == 1 else FallbackResolver(*engines)
 
 
-def create_app(store: Store | None = None, resolver: Resolver | None = None) -> FastAPI:
+def default_services() -> list[ServiceSpec]:
+    """Services du catalogue avec leurs fournisseurs réels ; une étape sans clé est signalée indisponible."""
+    return [suppliers_fr.build(RechercheEntreprises(), JevClassifier(config.TYPESAFE_API_KEY or None))]
+
+
+def create_app(
+    store: Store | None = None, resolver: Resolver | None = None, services: list[ServiceSpec] | None = None
+) -> FastAPI:
     store = store or Store(config.DB_PATH)
     store.purge_older_than(config.LOG_RETENTION_DAYS)
     if resolver is None:
         resolver = default_resolver()
+    if services is None:
+        services = default_services()
 
     app = FastAPI(
         title="304NotModified",
@@ -419,6 +432,9 @@ def create_app(store: Store | None = None, resolver: Resolver | None = None) -> 
     # Calculs sur les bougies fournies par l'agent (repris d'IchiVol ; 304 ne fournit aucune donnée).
     register_calc_routes(app, store, require_key)
 
+    # Catalogue de services (devis, budget, exécution, facturation) : voir app/services/routes.py.
+    register_service_routes(app, store, require_key, client_ip, services)
+
     @app.post("/v1/feedback")
     def feedback(body: FeedbackRequest, request: Request):
         # Pas de contrôle de quota : un retour ne coûte rien et ne doit jamais être refusé pour ça.
@@ -450,6 +466,8 @@ def create_app(store: Store | None = None, resolver: Resolver | None = None) -> 
             **store.stats(config.PRICE_PER_REQUEST_EUR, since=since, domain=domain),
             # Calculs /v1/calc/* : comptés à part (ils ne passent ni par le cache ni par une recherche).
             "calculations": store.calc_stats(since),
+            # Services du catalogue : coûts par étape, prix facturé, marge, réussite (coûts réels enregistrés).
+            "services": store.service_stats(since),
         }
 
     @app.get("/internal/timeseries", dependencies=[Depends(require_admin)], include_in_schema=False)

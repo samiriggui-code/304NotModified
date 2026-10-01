@@ -10,6 +10,7 @@ Deux façons de le servir :
   (ou Authorization: Bearer) de chaque agent. Sans clé, l'API applique sa limite d'accès sans clé.
 """
 
+import json
 import os
 from typing import Annotated, Any, Literal
 
@@ -54,13 +55,19 @@ def create_server(http: httpx.Client, api_key: str | None = None, *, remote: boo
             out["X-Forwarded-For"] = incoming["x-forwarded-for"]
         return out
 
-    def call(path: str, body: dict, ctx: Context) -> dict[str, Any]:
-        headers = {**agent_headers(ctx), "X-Client": "mcp:" + _client_name(ctx)}
+    def call(path: str, body: dict | None, ctx: Context, extra_headers: dict[str, str] | None = None) -> Any:
+        headers = {**agent_headers(ctx), "X-Client": "mcp:" + _client_name(ctx), **(extra_headers or {})}
         try:
-            response = http.post(path, json=body, headers=headers)
+            if body is None:
+                response = http.get(path, headers=headers)
+            else:
+                response = http.post(path, json=body, headers=headers)
         except httpx.HTTPError as exc:
             raise ToolError(f"Service 304NotModified injoignable : {exc.__class__.__name__}.") from exc
 
+        if path.startswith("/v1/services") and response.status_code in (402, 404, 409, 410, 422):
+            # Budget, devis ou paramètres : le détail structuré aide l'agent à corriger sa demande.
+            raise ToolError(f"HTTP {response.status_code} : {json.dumps(_detail_any(response), ensure_ascii=False)}")
         if response.status_code == 401:
             where = "l'en-tête X-API-Key" if remote else "NM304_API_KEY"
             raise ToolError(f"Clé d'API inconnue : vérifiez {where}. Clé gratuite : POST {config.PUBLIC_URL}/v1/keys.")
@@ -136,6 +143,52 @@ def create_server(http: httpx.Client, api_key: str | None = None, *, remote: boo
     ) -> dict[str, Any]:
         return call(f"/v1/calc/{calculation}", params, ctx)
 
+    @server.tool(
+        name="list_services",
+        description=(
+            "Catalogue des services (au-delà des questions) : pour chacun, son identifiant, sa version, ses "
+            "paramètres (input_schema), sa sortie (output_schema), son prix, son délai, ses limites, ses erreurs "
+            "et les étapes disponibles. Lire avant quote_service ou run_service."
+        ),
+        annotations=ToolAnnotations(title="Lister les services", read_only_hint=True, idempotent_hint=True),
+    )
+    def list_services(ctx: Context) -> dict[str, Any]:
+        return {"services": call("/v1/services", None, ctx)}
+
+    @server.tool(
+        name="quote_service",
+        description=(
+            "Devis gratuit : prix ferme d'un service pour ces paramètres, valable quelques minutes, utilisable "
+            "une fois avec run_service (quote_id). service : identifiant (ex. fr-suppliers). params : selon "
+            "input_schema."
+        ),
+        annotations=ToolAnnotations(title="Demander un devis", read_only_hint=False, idempotent_hint=False),
+    )
+    def quote_service(service: str, params: dict[str, Any], ctx: Context) -> dict[str, Any]:
+        return call(f"/v1/services/{service}/quote", {"params": params}, ctx)
+
+    @server.tool(
+        name="run_service",
+        description=(
+            "Exécute un service et renvoie un résultat structuré avec ses sources, ses limites et ce qui manque. "
+            "max_price_eur : budget maximal (au-delà, rien n'est exécuté). quote_id : devis à utiliser. "
+            "request_key : identifiant de votre demande, à réutiliser en cas de relance (même résultat, pas de "
+            "double facturation). Facturé seulement si status=completed."
+        ),
+        annotations=ToolAnnotations(title="Exécuter un service", read_only_hint=False, open_world_hint=True),
+    )
+    def run_service(
+        service: str,
+        params: dict[str, Any],
+        ctx: Context,
+        max_price_eur: float | None = None,
+        quote_id: str | None = None,
+        request_key: str | None = None,
+    ) -> dict[str, Any]:
+        body = {"params": params, "max_price_eur": max_price_eur, "quote_id": quote_id}
+        headers = {"Idempotency-Key": request_key} if request_key else None
+        return call(f"/v1/services/{service}/run", body, ctx, headers)
+
     return server
 
 
@@ -145,6 +198,13 @@ def _detail(response: httpx.Response) -> str | None:
     except ValueError:
         return None
     return detail if isinstance(detail, str) else None
+
+
+def _detail_any(response: httpx.Response) -> Any:
+    try:
+        return response.json().get("detail")
+    except (ValueError, AttributeError):
+        return None
 
 
 def _client_name(ctx: Context) -> str:

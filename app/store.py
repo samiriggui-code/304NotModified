@@ -74,6 +74,48 @@ CREATE TABLE IF NOT EXISTS calc_requests (
     latency_ms INTEGER NOT NULL,
     client TEXT
 );
+-- Catalogue de services : devis (prix ferme jusqu'à expiration, lié à une clé et à des paramètres),
+-- exécutions (coûts par étape, prix facturé, état final) et résultats réutilisables.
+CREATE TABLE IF NOT EXISTS quotes (
+    quote_id TEXT PRIMARY KEY,
+    api_key TEXT NOT NULL,
+    service TEXT NOT NULL,
+    version TEXT NOT NULL,
+    fingerprint TEXT NOT NULL,      -- empreinte des paramètres : un devis ne vaut que pour eux
+    price_eur REAL NOT NULL,
+    created_at REAL NOT NULL,
+    expires_at REAL NOT NULL,
+    used_by TEXT                    -- run_id qui l'a consommé ; NULL tant qu'il est libre
+);
+CREATE TABLE IF NOT EXISTS service_runs (
+    run_id TEXT PRIMARY KEY,
+    ts REAL NOT NULL,
+    api_key TEXT NOT NULL,
+    service TEXT NOT NULL,
+    version TEXT NOT NULL,
+    quote_id TEXT,
+    status TEXT NOT NULL,           -- completed | partial | failed
+    billed INTEGER NOT NULL,        -- 1 seulement si le résultat a été livré complet
+    price_eur REAL NOT NULL,        -- prix facturé (0 si non facturé)
+    cost_collect_eur REAL NOT NULL DEFAULT 0,
+    cost_classify_eur REAL NOT NULL DEFAULT 0,
+    cost_llm_eur REAL NOT NULL DEFAULT 0,
+    cost_other_eur REAL NOT NULL DEFAULT 0,
+    latency_ms INTEGER NOT NULL,
+    cached INTEGER NOT NULL DEFAULT 0,
+    steps TEXT NOT NULL,            -- JSON : chaque étape, son fournisseur, son coût, son issue
+    reason TEXT,
+    channel TEXT,
+    client TEXT
+);
+CREATE INDEX IF NOT EXISTS service_runs_key_ts ON service_runs(api_key, ts);
+CREATE TABLE IF NOT EXISTS service_cache (
+    cache_key TEXT PRIMARY KEY,     -- service + version + paramètres normalisés
+    service TEXT NOT NULL,
+    result TEXT NOT NULL,
+    created_at REAL NOT NULL,
+    expires_at REAL NOT NULL
+);
 CREATE TABLE IF NOT EXISTS idempotency (
     scope TEXT NOT NULL,            -- clé d'API, ou « anonymous:<adresse IP> »
     idem_key TEXT NOT NULL,
@@ -201,6 +243,122 @@ class Store:
         with self._lock:
             self._db.execute("DELETE FROM idempotency WHERE scope = ? AND idem_key = ?", (scope, idem_key))
             self._db.commit()
+
+    # --- catalogue de services : devis, exécutions, résultats réutilisables ---
+
+    def create_quote(
+        self, *, api_key: str, service: str, version: str, fingerprint: str, price_eur: float, now: float, ttl: float
+    ) -> dict:
+        quote = {
+            "quote_id": "quo_" + secrets.token_urlsafe(12),
+            "api_key": api_key,
+            "service": service,
+            "version": version,
+            "fingerprint": fingerprint,
+            "price_eur": price_eur,
+            "created_at": now,
+            "expires_at": now + ttl,
+        }
+        with self._lock:
+            self._db.execute(
+                """INSERT INTO quotes (quote_id, api_key, service, version, fingerprint, price_eur, created_at, expires_at)
+                   VALUES (:quote_id, :api_key, :service, :version, :fingerprint, :price_eur, :created_at, :expires_at)""",
+                quote,
+            )
+            self._db.commit()
+        return quote
+
+    def claim_quote(self, quote_id: str, api_key: str, run_id: str, now: float) -> tuple[str, dict | None]:
+        """Réserve un devis pour une exécution. Renvoie ("ok", devis), ("unknown", None), ("expired", devis)
+        ou ("used", devis). Un devis ne sert qu'une fois : pas de double exécution sur un même devis."""
+        with self._lock:
+            row = self._db.execute(
+                "SELECT * FROM quotes WHERE quote_id = ? AND api_key = ?", (quote_id, api_key)
+            ).fetchone()
+            if row is None:
+                return "unknown", None
+            quote = dict(row)
+            if quote["used_by"]:
+                return "used", quote
+            if quote["expires_at"] <= now:
+                return "expired", quote
+            claimed = self._db.execute(
+                "UPDATE quotes SET used_by = ? WHERE quote_id = ? AND used_by IS NULL", (run_id, quote_id)
+            ).rowcount
+            self._db.commit()
+        return ("ok", quote) if claimed else ("used", quote)
+
+    def release_quote(self, quote_id: str, run_id: str) -> None:
+        """Rend un devis réutilisable quand l'exécution n'a rien facturé (échec passager, résultat partiel)."""
+        with self._lock:
+            self._db.execute("UPDATE quotes SET used_by = NULL WHERE quote_id = ? AND used_by = ?", (quote_id, run_id))
+            self._db.commit()
+
+    def billed_since(self, api_key: str, since: float) -> float:
+        with self._lock:
+            return self._db.execute(
+                "SELECT COALESCE(SUM(price_eur), 0) FROM service_runs WHERE api_key = ? AND ts >= ? AND billed = 1",
+                (api_key, since),
+            ).fetchone()[0]
+
+    def log_service_run(self, run: dict) -> None:
+        with self._lock:
+            self._db.execute(
+                """INSERT INTO service_runs
+                   (run_id, ts, api_key, service, version, quote_id, status, billed, price_eur, cost_collect_eur,
+                    cost_classify_eur, cost_llm_eur, cost_other_eur, latency_ms, cached, steps, reason, channel, client)
+                   VALUES (:run_id, :ts, :api_key, :service, :version, :quote_id, :status, :billed, :price_eur,
+                           :cost_collect_eur, :cost_classify_eur, :cost_llm_eur, :cost_other_eur, :latency_ms, :cached,
+                           :steps, :reason, :channel, :client)""",
+                {**run, "steps": json.dumps(run["steps"], ensure_ascii=False)},
+            )
+            self._db.commit()
+
+    def service_cache_get(self, cache_key: str, now: float) -> dict | None:
+        with self._lock:
+            row = self._db.execute(
+                "SELECT result, created_at, expires_at FROM service_cache WHERE cache_key = ? AND expires_at > ?",
+                (cache_key, now),
+            ).fetchone()
+        if row is None:
+            return None
+        return {"result": json.loads(row["result"]), "created_at": row["created_at"], "expires_at": row["expires_at"]}
+
+    def service_cache_put(self, cache_key: str, service: str, result: dict, now: float, ttl: float) -> None:
+        with self._lock:
+            self._db.execute(
+                """INSERT OR REPLACE INTO service_cache (cache_key, service, result, created_at, expires_at)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (cache_key, service, json.dumps(result, ensure_ascii=False), now, now + ttl),
+            )
+            self._db.commit()
+
+    def service_stats(self, since: float = 0.0) -> dict:
+        """Par service : exécutions, issues, coûts par étape, prix facturé, marge, latence, part servie
+        depuis la mémoire. Les montants sont ceux enregistrés (coûts réels lus chez les fournisseurs)."""
+        with self._lock:
+            rows = self._db.execute(
+                """SELECT service, COUNT(*) AS runs, SUM(status = 'completed') AS completed,
+                          SUM(status = 'partial') AS partial, SUM(status = 'failed') AS failed,
+                          SUM(cached) AS cached, SUM(billed) AS billed,
+                          COALESCE(SUM(price_eur), 0) AS revenue_eur,
+                          COALESCE(SUM(cost_collect_eur), 0) AS cost_collect_eur,
+                          COALESCE(SUM(cost_classify_eur), 0) AS cost_classify_eur,
+                          COALESCE(SUM(cost_llm_eur), 0) AS cost_llm_eur,
+                          COALESCE(SUM(cost_other_eur), 0) AS cost_other_eur,
+                          CAST(AVG(latency_ms) AS INTEGER) AS avg_latency_ms
+                   FROM service_runs WHERE ts >= ? GROUP BY service""",
+                (since,),
+            ).fetchall()
+        out = {}
+        for r in rows:
+            row = dict(r)
+            cost = row["cost_collect_eur"] + row["cost_classify_eur"] + row["cost_llm_eur"] + row["cost_other_eur"]
+            row["cost_eur"] = round(cost, 6)
+            row["margin_eur"] = round(row["revenue_eur"] - cost, 6)
+            row["success_rate"] = round(row["completed"] / row["runs"], 3) if row["runs"] else 0.0
+            out[row.pop("service")] = row
+        return out
 
     def count_keys_since(self, origin: str, since: float) -> int:
         with self._lock:

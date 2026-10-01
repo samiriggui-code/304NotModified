@@ -74,8 +74,9 @@ Vérifiez vous-même les sources si l'enjeu est important : confidence est une e
 
 ## MCP (Model Context Protocol)
 Serveur distant (Streamable HTTP) : {url}/mcp
-Outils : ask (question, domain, context), feedback (request_id, useful, issue, comment) et
-calculate (calculation, params : voir « Calculs sur vos données »).
+Outils : ask (question, domain, context), feedback (request_id, useful, issue, comment),
+calculate (calculation, params : voir « Calculs sur vos données ») et list_services, quote_service,
+run_service (voir « Services »).
 Clé facultative dans l'en-tête X-API-Key. Exemple avec Claude Code :
 claude mcp add --transport http 304notmodified {url}/mcp
 
@@ -104,6 +105,23 @@ Bougie : {{"time": <Unix s>, "open": …, "high": …, "low": …, "close": …,
   objectif, risque.
 Champ « series » (0 à 500) : détail des dernières bougies. Chaque calcul réussi compte comme une requête.
 
+## Services (catalogue, devis, budget)
+Catalogue avec contrats complets (input_schema, output_schema, prix, délai, fraîcheur, limites, erreurs) :
+GET {url}/v1/services ; un service : GET {url}/v1/services/<id>.
+- fr-suppliers : entreprises françaises selon vos critères (mots-clés, codes NAF, départements,
+  catégorie), depuis la source officielle (API Recherche d'entreprises), avec SIREN, siège, activité,
+  taille et lien vers la fiche officielle ; classement de pertinence facultatif sur un critère libre.
+Devis gratuit (prix ferme, quelques minutes, une seule utilisation) :
+POST {url}/v1/services/<id>/quote  Corps : {{"params": {{…}}}}
+Exécution : POST {url}/v1/services/<id>/run
+Corps : {{"params": {{…}}, "quote_id": "facultatif", "max_price_eur": "facultatif : budget maximal"}}
+En-tête facultatif Idempotency-Key : une relance reçoit le même résultat, sans double facturation.
+Réponse : status (completed | partial | failed), result, sources (nom, url, paramètres, date de
+collecte), limits, missing (ce qui manque et pourquoi), cached, billing (billed, price_eur).
+Facturé seulement si status=completed. 402 : prix au-delà de max_price_eur ou plafond journalier.
+Version d'essai : « facturé » = décompté du quota de votre clé ; aucun encaissement réel.
+MCP : outils list_services, quote_service, run_service (mêmes règles).
+
 ## Domaines (champ « domain », facultatif)
 {domains}
 Liste en JSON : GET {url}/v1/domains
@@ -124,7 +142,7 @@ def robots_text() -> str:
 
 
 def sitemap_xml() -> str:
-    pages = ["/", "/llms.txt", "/docs", "/openapi.json", "/v1/domains"]
+    pages = ["/", "/llms.txt", "/docs", "/openapi.json", "/v1/domains", "/v1/services"]
     urls = "".join(f"  <url><loc>{escape(config.PUBLIC_URL + p)}</loc></url>\n" for p in pages)
     return (
         '<?xml version="1.0" encoding="UTF-8"?>\n'

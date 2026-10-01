@@ -222,5 +222,33 @@ NO_OFFICIAL_SOURCE_MAX_CONFIDENCE = float(os.environ.get("NO_OFFICIAL_SOURCE_MAX
 # aucune réponse (idée de retour par résultat reprise de HiveMind, voir docs/ANALYSE_PARALLEL_GPTCACHE_HIVEMIND_X402.md).
 FEEDBACK_ISSUES = ("wrong", "outdated", "incomplete", "bad_source", "off_topic", "contradiction", "other")
 
+# --- Catalogue de services (/v1/services) --------------------------------------------------------
+# Devis : durée de validité. Le prix d'un devis est celui facturé si le service aboutit.
+QUOTE_TTL_SECONDS = int(os.environ.get("QUOTE_TTL_SECONDS", "600"))
+# Plafond de dépense par clé d'API et par jour, tous services confondus (euros facturés).
+SERVICE_DAILY_CAP_EUR = float(os.environ.get("SERVICE_DAILY_CAP_EUR", "5"))
+
+# Service fr-suppliers. Prix PROVISOIRES, à fixer d'après les coûts mesurés (aucun encaissement réel).
+SUPPLIERS_PRICE_EUR = float(os.environ.get("SUPPLIERS_PRICE_EUR", "0.02"))
+SUPPLIERS_RELEVANCE_PRICE_EUR = float(os.environ.get("SUPPLIERS_RELEVANCE_PRICE_EUR", "0.01"))
+# Les données officielles sont mises à jour chaque jour : un même résultat est resservi 24 h au plus.
+SUPPLIERS_CACHE_SECONDS = int(os.environ.get("SUPPLIERS_CACHE_SECONDS", "86400"))
+
+# Jev (TypeSafe AI) : désactivé sans clé. Version fixée (les seuils en dépendent) ; tarif vérifié le
+# 01/10/2026 sur docs.typesafe.ai/models : 0,042 $ par million de jetons d'entrée, sortie gratuite.
+TYPESAFE_API_KEY = os.environ.get("TYPESAFE_API_KEY", "")
+JEV_MODEL = os.environ.get("JEV_MODEL", "jev-1.13.0")
+JEV_USD_PER_MTOK = float(os.environ.get("JEV_USD_PER_MTOK", "0.042"))
+JEV_TIMEOUT_SECONDS = float(os.environ.get("JEV_TIMEOUT_SECONDS", "20"))
+# Seuils de décision (oui au-dessus, non au-dessous, « indéterminé » entre les deux). NON CALIBRÉS :
+# à régler sur un échantillon étiqueté de nos propres cas.
+JEV_ACCEPT_THRESHOLD = float(os.environ.get("JEV_ACCEPT_THRESHOLD", "0.75"))
+JEV_REJECT_THRESHOLD = float(os.environ.get("JEV_REJECT_THRESHOLD", "0.25"))
+
+# Apify : désactivé sans jeton. Plafonds appliqués à chaque exécution d'Actor.
+APIFY_TOKEN = os.environ.get("APIFY_TOKEN", "")
+APIFY_MAX_CONCURRENT_RUNS = int(os.environ.get("APIFY_MAX_CONCURRENT_RUNS", "2"))
+APIFY_MAX_CHARGE_USD_PER_RUN = float(os.environ.get("APIFY_MAX_CHARGE_USD_PER_RUN", "0.5"))
+
 # Durée de conservation du journal des requêtes (questions, contextes, retours), en jours.
 LOG_RETENTION_DAYS = int(os.environ.get("LOG_RETENTION_DAYS", "365"))

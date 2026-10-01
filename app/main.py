@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 
 from . import admin_auth, config
 from .aliases import CONTEXT_ALIASES, DOMAIN_ALIASES, QUESTION_ALIASES
+from .calc.routes import register_calc_routes
 from .engine import SearchCoordinator
 from .normalize import question_key
 from .public import home_page, llms_text
@@ -395,6 +396,9 @@ def create_app(store: Store | None = None, resolver: Resolver | None = None) -> 
         request_id = record("miss", fresh.domain, cost_eur=resolution.cost_eur, version_id=fresh.version_id)
         return _payload(fresh, cached=False, request_id=request_id)
 
+    # Calculs sur les bougies fournies par l'agent (repris d'IchiVol ; 304 ne fournit aucune donnée).
+    register_calc_routes(app, store, require_key)
+
     @app.post("/v1/feedback")
     def feedback(body: FeedbackRequest, request: Request):
         # Pas de contrôle de quota : un retour ne coûte rien et ne doit jamais être refusé pour ça.
@@ -422,7 +426,11 @@ def create_app(store: Store | None = None, resolver: Resolver | None = None) -> 
     @app.get("/internal/stats", dependencies=[Depends(require_admin)], include_in_schema=False)
     def stats(days: float | None = Query(default=None, gt=0, le=3650), domain: str | None = DomainFilter):
         since = time.time() - days * 86400 if days else 0.0
-        return store.stats(config.PRICE_PER_REQUEST_EUR, since=since, domain=domain)
+        return {
+            **store.stats(config.PRICE_PER_REQUEST_EUR, since=since, domain=domain),
+            # Calculs /v1/calc/* : comptés à part (ils ne passent ni par le cache ni par une recherche).
+            "calculations": store.calc_stats(since),
+        }
 
     @app.get("/internal/timeseries", dependencies=[Depends(require_admin)], include_in_schema=False)
     def timeseries(

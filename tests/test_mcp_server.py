@@ -36,8 +36,26 @@ def test_tool_is_listed_as_read_only(api):
             return (await client.list_tools()).tools
 
     tools = {t.name: t for t in anyio.run(run)}
-    assert set(tools) == {"ask", "feedback"}
+    assert set(tools) == {"ask", "feedback", "calculate"}
     assert tools["ask"].annotations.read_only_hint is True
+    assert tools["calculate"].annotations.read_only_hint is True
+
+
+def test_calculate_goes_through_the_calc_api(api):
+    http, _, key = api
+    candles = [
+        {"time": i, "open": 100 + i, "high": 101 + i, "low": 99 + i, "close": 100.5 + i, "volume": 10}
+        for i in range(60)
+    ]
+
+    async def run():
+        async with Client(create_server(http, key)) as client:
+            return await client.call_tool("calculate", {"calculation": "regime", "params": {"candles": candles}})
+
+    result = anyio.run(run)
+    assert not result.is_error
+    body = result.structured_content or {}
+    assert body.get("calculation") == "regime" and body.get("status") == "computed"
 
 
 def test_ask_goes_through_api_and_cache(api):

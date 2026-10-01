@@ -117,6 +117,25 @@ def create_server(http: httpx.Client, api_key: str | None = None, *, remote: boo
         body = {"request_id": request_id, "useful": useful, "issue": issue, "comment": comment}
         return call("/v1/feedback", body, ctx)
 
+    @server.tool(
+        name="calculate",
+        description=(
+            "Calcul déterministe sur VOS bougies (304 ne fournit aucune donnée de marché). calculation : "
+            "ichimoku-rvol (Ichimoku confirmé par le volume relatif), regime (tendance ADX, volatilité ATR, "
+            "direction) ou position-size (taille de position pour un risque fixé). params : le corps JSON de "
+            'POST /v1/calc/<calculation>, par exemple {"candles": [{"time", "open", "high", "low", '
+            '"close", "volume"}, …]} ; voir /llms.txt. Résultat : méthode publiée, valeurs, horodatage. '
+            "Ce n'est pas un conseil en investissement."
+        ),
+        annotations=ToolAnnotations(title="Calculer sur vos données", read_only_hint=True, idempotent_hint=True),
+    )
+    def calculate(
+        calculation: Literal["ichimoku-rvol", "regime", "position-size"],
+        params: dict[str, Any],
+        ctx: Context,
+    ) -> dict[str, Any]:
+        return call(f"/v1/calc/{calculation}", params, ctx)
+
     return server
 
 

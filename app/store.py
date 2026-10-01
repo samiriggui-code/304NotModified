@@ -62,6 +62,18 @@ CREATE TABLE IF NOT EXISTS api_keys (
 );
 -- Idempotence de /v1/answer : une relance avec la même Idempotency-Key reçoit la réponse déjà
 -- produite, sans nouvelle recherche ni nouveau décompte (fondation de la future facturation).
+-- Calculs sur les données de l'agent (/v1/calc/*) : journal à part, pour ne pas fausser les mesures
+-- des questions (taux de répétition, de cache, coût des recherches). Aucune bougie n'est gardée.
+CREATE TABLE IF NOT EXISTS calc_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    request_id TEXT NOT NULL UNIQUE,
+    ts REAL NOT NULL,
+    api_key TEXT NOT NULL,
+    name TEXT NOT NULL,
+    candles INTEGER NOT NULL,
+    latency_ms INTEGER NOT NULL,
+    client TEXT
+);
 CREATE TABLE IF NOT EXISTS idempotency (
     scope TEXT NOT NULL,            -- clé d'API, ou « anonymous:<adresse IP> »
     idem_key TEXT NOT NULL,
@@ -368,6 +380,27 @@ class Store:
         return request_id
 
     # --- retours des agents ------------------------------------------------
+
+    def log_calc(self, *, api_key: str, name: str, candles: int, latency_ms: int, client: str | None) -> str:
+        request_id = "calc_" + secrets.token_urlsafe(12)
+        with self._lock:
+            self._db.execute(
+                """INSERT INTO calc_requests (request_id, ts, api_key, name, candles, latency_ms, client)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (request_id, time.time(), api_key, name, candles, latency_ms, client),
+            )
+            self._db.commit()
+        return request_id
+
+    def calc_stats(self, since: float = 0.0) -> dict:
+        with self._lock:
+            rows = self._db.execute(
+                """SELECT name, COUNT(*) AS calls, COUNT(DISTINCT api_key) AS clients,
+                          CAST(AVG(latency_ms) AS INTEGER) AS avg_latency_ms
+                   FROM calc_requests WHERE ts >= ? GROUP BY name ORDER BY 2 DESC""",
+                (since,),
+            ).fetchall()
+        return {r["name"]: dict(r) for r in rows}
 
     def add_feedback(self, *, request_id, api_key, useful, issue=None, comment=None) -> bool:
         """Note le retour d'un agent sur une de SES requêtes. Ne touche jamais aux réponses."""

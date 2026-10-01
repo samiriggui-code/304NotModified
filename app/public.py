@@ -74,7 +74,8 @@ Vérifiez vous-même les sources si l'enjeu est important : confidence est une e
 
 ## MCP (Model Context Protocol)
 Serveur distant (Streamable HTTP) : {url}/mcp
-Outils : ask (question, domain, context) et feedback (request_id, useful, issue, comment).
+Outils : ask (question, domain, context), feedback (request_id, useful, issue, comment) et
+calculate (calculation, params : voir « Calculs sur vos données »).
 Clé facultative dans l'en-tête X-API-Key. Exemple avec Claude Code :
 claude mcp add --transport http 304notmodified {url}/mcp
 
@@ -86,6 +87,22 @@ Corps JSON : {{"request_id": "...", "useful": true,
 issue : wrong = fausse, outdated = périmée, bad_source = source insuffisante, off_topic = hors sujet,
 contradiction = une autre source dit autre chose.
 Vos retours orientent le service ; ils ne modifient jamais directement une réponse.
+
+## Calculs sur vos données (trading, analyse de marché)
+Vous envoyez VOS bougies clôturées (de la plus ancienne à la plus récente) ; 304 ne fournit aucune
+donnée de marché et ne garde pas vos bougies. Calculs déterministes, sans regard vers le futur (la
+valeur à une bougie ne dépend que des bougies précédentes), avec la méthode et ses paramètres.
+Ce ne sont pas des conseils en investissement ni des recommandations d'achat ou de vente.
+Bougie : {{"time": <Unix s>, "open": …, "high": …, "low": …, "close": …, "volume": …}} (2 à 5000).
+- POST {url}/v1/calc/ichimoku-rvol : Ichimoku (9/26/52/26 réglables) ; un croisement Tenkan/Kijun ou
+  une sortie du nuage n'est « volume_confirmed » que si le volume relatif atteint rvol_confirm (1,5).
+  Au moins 78 bougies pour un nuage complet avec les réglages par défaut.
+- POST {url}/v1/calc/regime : structure (TRENDING/RANGING, ADX de Wilder), volatilité (rang de l'ATR
+  dans son propre historique), direction (+DI/-DI).
+- POST {url}/v1/calc/position-size : {{"equity", "direction": "LONG|SHORT", "entry_price",
+  "stop_distance" ou "candles" (stop = ATR × atr_multiplier), "risk_pct": 0.01, …}} → quantité, stop,
+  objectif, risque.
+Champ « series » (0 à 500) : détail des dernières bougies. Chaque calcul réussi compte comme une requête.
 
 ## Domaines (champ « domain », facultatif)
 {domains}

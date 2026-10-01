@@ -12,6 +12,8 @@ export class ApiError extends Error {
   }
 }
 
+let redirecting = false;
+
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   let response: Response;
   try {
@@ -27,9 +29,12 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
     throw new ApiError(0, 'Connexion impossible : vérifiez le réseau.');
   }
 
-  // Session absente ou expirée : retour à la connexion.
-  if ((response.status === 401 || response.status === 403) && typeof window !== 'undefined') {
+  // Session absente ou expirée : on efface la session puis on retourne à la connexion, une seule fois
+  // même si plusieurs appels échouent en même temps.
+  if ((response.status === 401 || response.status === 403) && typeof window !== 'undefined' && !redirecting) {
+    redirecting = true;
     const here = window.location.pathname.slice(toAbsoluteUrl('').length) + window.location.search;
+    await fetch(toAbsoluteUrl('/api/auth/logout'), { method: 'POST' }).catch(() => undefined);
     window.location.href = toAbsoluteUrl(`/signin?callbackUrl=${encodeURIComponent(here || '/')}`);
   }
 
@@ -48,6 +53,5 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
 
 export const api = {
   get: <T>(path: string) => apiFetch<T>(path),
-  post: <T>(path: string, body: unknown = {}) =>
-    apiFetch<T>(path, { method: 'POST', body: JSON.stringify(body) }),
+  post: <T>(path: string, body: unknown = {}) => apiFetch<T>(path, { method: 'POST', body: JSON.stringify(body) }),
 };

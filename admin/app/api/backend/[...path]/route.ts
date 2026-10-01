@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { API_URL, SESSION_COOKIE } from '@/lib/session';
+import { API_URL, BASE_PATH, SESSION_COOKIE } from '@/lib/session';
 
 // Proxy authentifié vers l'API : /api/backend/stats → {API_URL}/internal/stats
 // Ajoute le Bearer lu dans le cookie de session. Seules les routes /internal/* sont atteignables.
@@ -32,8 +32,12 @@ async function proxy(request: NextRequest, { params }: { params: Promise<{ path:
     status: upstream.status,
     headers: { 'content-type': upstream.headers.get('content-type') ?? 'application/json' },
   });
-  // Jeton expiré ou invalide : on purge la session.
-  if (upstream.status === 401 || upstream.status === 403) response.cookies.delete(SESSION_COOKIE);
+  // Jeton expiré ou invalide : on purge la session. Le cookie doit être effacé avec le même chemin que
+  // celui de sa création (le basePath, /admin) : sinon le navigateur le garde, la page de connexion
+  // renvoie vers le tableau de bord, qui renvoie vers la connexion… en boucle.
+  if (upstream.status === 401 || upstream.status === 403) {
+    response.cookies.set(SESSION_COOKIE, '', { path: BASE_PATH || '/', maxAge: 0 });
+  }
   return response;
 }
 

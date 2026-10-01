@@ -3,7 +3,7 @@
 > Passation du 30 septembre 2026 (fin de la session cloud, passage en mode local).
 > À lire en premier par la prochaine session de Claude, avec `CLAUDE.md` et `docs/VISION.md`.
 
-## 0bis. Catalogue de services (1er octobre 2026, soir, pas encore en production)
+## 0bis. Catalogue de services (1er octobre 2026, soir, en production : commit b68d41e)
 
 `/v1/services` : catalogue, devis ferme, budget (`max_price_eur`, plafond 24 h par clé), exécution,
 contrôle du schéma, facturation seulement si `completed`, coûts par étape dans `/internal/stats`.

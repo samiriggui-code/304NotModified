@@ -3,6 +3,36 @@
 > Passation du 30 septembre 2026 (fin de la session cloud, passage en mode local).
 > À lire en premier par la prochaine session de Claude, avec `CLAUDE.md` et `docs/VISION.md`.
 
+## 0. Reprise prévue (1er octobre 2026) : trois chantiers à mener ensemble
+
+État en production (VPS Hostinger, `/opt/304notmodified`, commit `3f8cef1`) : moteur OpenRouter
+(clé Anthropic vide sur le VPS), faits sourcés (`claims`), période de validité, contrôle des sources
+officielles, calculs `/v1/calc/*` (repris d'IchiVol, parité exacte vérifiée), outil MCP `calculate`.
+Essais réels : `docs/ESSAI_REEL_2026-09-30.md` ; analyse des 4 dépôts :
+`docs/ANALYSE_PARALLEL_GPTCACHE_HIVEMIND_X402.md` ; cas réels 12 à 16.
+
+**Les clients sont des IA qui paient avec leur wallet (x402), pas des humains** : pas de Stripe en voie
+principale (rappel ferme du propriétaire).
+
+1. **Paiement x402 en mode test** (Base Sepolia, faux USDC, désactivé par défaut) sur `/v1/answer` et
+   `/v1/calc/*`, HTTP et MCP : réponse 402 avec le prix (réponse en mémoire < recherche nouvelle <
+   prix fixé par réglage), vérification avant, encaissement **seulement si livré**, idempotence déjà
+   en place (à aligner sur `payment-identifier` : 409 et clé de 16 à 128 caractères). SDK officiel
+   `x402` (x402-foundation, 2.25.0, « Alpha » ; licence du dépôt Apache-2.0, paquet déclaré MIT).
+   **Il faut l'adresse publique d'un wallet de test du propriétaire (0x…)** ; sinon, facilitateur simulé.
+2. **4e calcul : test d'une règle sur données passées**, fournies par l'agent (rendement, perte maximale,
+   nombre de trades), en reprenant le backtest d'IchiVol (`ichivol-app/engine/app/backtest/`,
+   `strategy_lab/ruleset_backtest.py`) avec la même exigence : parité exacte et aucun regard vers le futur.
+3. **Inscription dans l'annuaire x402 (Bazaar)** : métadonnées de découverte (`extensions.bazaar` :
+   schémas d'entrée et de sortie, exemples) sur chaque route payante. L'annuaire publie appels et
+   payeurs sur 30 jours : premier service du marché = « verdict » sur un jeton (≈ 5 900 $/mois).
+
+Rappels : aucune donnée de marché fournie par 304 (Binance et CoinGecko l'interdisent, cas 15 et 16) ;
+jamais « achète / vends » ; avis comptable (USDC, TVA des clients anonymes) et juridique avant
+d'encaisser pour de vrai ; `tests/test_cli.py` (ajouté par une autre session) échoue sous Windows
+(`os.chown`), passe a priori sous Linux, non vérifié (pytest absent du VPS). Résultats bruts des essais
+et clé d'essai : `/tmp/essai304` sur le VPS. Dépense d'essais à ce jour : ≈ 4,50 € (OpenRouter).
+
 ## 1. Le projet en une phrase
 
 Une **mémoire commune de réponses vérifiées, sourcées et datées pour les agents IA** : un agent pose

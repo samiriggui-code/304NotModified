@@ -117,6 +117,21 @@ Documentation OpenAPI : {url}/docs et {url}/openapi.json
 """
 
 
+def robots_text() -> str:
+    """Tout le site public est ouvert aux robots, ceux des IA compris : être trouvé par les agents est
+    le but. Seul le tableau de bord est exclu (il n'est de toute façon accessible qu'avec un mot de passe)."""
+    return f"User-agent: *\nAllow: /\nDisallow: /admin\n\nSitemap: {config.PUBLIC_URL}/sitemap.xml\n"
+
+
+def sitemap_xml() -> str:
+    pages = ["/", "/llms.txt", "/docs", "/openapi.json", "/v1/domains"]
+    urls = "".join(f"  <url><loc>{escape(config.PUBLIC_URL + p)}</loc></url>\n" for p in pages)
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' + urls + "</urlset>\n"
+    )
+
+
 def home_page() -> str:
     url = escape(config.PUBLIC_URL)
     cards = "\n".join(

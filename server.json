@@ -1,0 +1,22 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "com.304notfound/304notmodified",
+  "title": "304NotModified",
+  "description": "Sourced, dated answers for agents (FR/EU rules, e-invoicing, Qualiopi) + market math on your data",
+  "version": "0.3.0",
+  "websiteUrl": "https://304notfound.com",
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://304notfound.com/mcp",
+      "headers": [
+        {
+          "name": "X-API-Key",
+          "description": "Optional. Free key: POST https://304notfound.com/v1/keys. Without a key: a few questions per day.",
+          "isRequired": false,
+          "isSecret": true
+        }
+      ]
+    }
+  ]
+}

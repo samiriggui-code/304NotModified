@@ -8,6 +8,7 @@ import logging
 import os
 import time
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Literal
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Response
@@ -19,7 +20,7 @@ from .aliases import CONTEXT_ALIASES, DOMAIN_ALIASES, QUESTION_ALIASES
 from .calc.routes import register_calc_routes
 from .engine import SearchCoordinator
 from .normalize import question_key
-from .public import home_page, llms_text
+from .public import home_page, llms_text, robots_text, sitemap_xml
 from .resolver import (
     REASONS,
     TRANSIENT_REASONS,
@@ -34,6 +35,9 @@ from .resolver import (
 from .store import CachedAnswer, Store
 
 log = logging.getLogger("304notmodified")
+
+# Preuve de propriété du domaine pour le registre MCP (clé publique Ed25519, voir docs/DISTRIBUTION.md).
+REGISTRY_AUTH_FILE = Path(__file__).resolve().parent.parent / "deploy" / "mcp-registry-auth"
 
 
 class AnswerRequest(BaseModel):
@@ -232,6 +236,22 @@ def create_app(store: Store | None = None, resolver: Resolver | None = None) -> 
     @app.get("/llms.txt", response_class=PlainTextResponse)
     def llms_txt():
         return llms_text()
+
+    # Découverte : robots des moteurs et des IA bienvenus, plan du site, preuve de propriété du domaine
+    # pour le registre officiel des serveurs MCP (clé publique seulement ; la clé privée n'est pas ici).
+    @app.get("/robots.txt", response_class=PlainTextResponse, include_in_schema=False)
+    def robots():
+        return robots_text()
+
+    @app.get("/sitemap.xml", include_in_schema=False)
+    def sitemap():
+        return Response(sitemap_xml(), media_type="application/xml")
+
+    @app.get("/.well-known/mcp-registry-auth", response_class=PlainTextResponse, include_in_schema=False)
+    def mcp_registry_auth():
+        if not REGISTRY_AUTH_FILE.exists():
+            raise HTTPException(404, "Non configuré.")
+        return REGISTRY_AUTH_FILE.read_text(encoding="utf-8").strip() + "\n"
 
     @app.get("/v1/domains", summary="Domaines couverts et durée de fraîcheur de leurs réponses")
     def public_domains():

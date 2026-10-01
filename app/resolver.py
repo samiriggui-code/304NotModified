@@ -9,6 +9,7 @@ import json
 import re
 from dataclasses import dataclass, field
 from typing import Protocol
+from urllib.parse import urlparse
 
 import httpx
 
@@ -228,7 +229,19 @@ def _resolution_from_text(text: str, citations: list[dict], domain_hint: str | N
     if not sources:
         # Une réponse sans source n'est jamais mise en cache.
         return Resolution(None, domain, 0.0, cost_eur=cost, reason="no_source")
+    if official_source_count(domain, sources) == 0:
+        # Aucune source officielle pour un domaine qui en a : réponse gardée, confiance plafonnée.
+        confidence = min(confidence, config.NO_OFFICIAL_SOURCE_MAX_CONFIDENCE)
     return Resolution(str(answer), domain, confidence, sources, cost)
+
+
+def official_source_count(domain: str, sources: list[dict]) -> int | None:
+    """Nombre de sources officielles pour le domaine ; None si le domaine n'a pas de liste."""
+    official = config.OFFICIAL_SOURCES.get(domain)
+    if official is None:
+        return None
+    hosts = {urlparse(s.get("url") or "").hostname or "" for s in sources}
+    return sum(any(h == o or h.endswith("." + o) for o in official) for h in hosts)
 
 
 def _parse_final_json(text: str) -> dict | None:

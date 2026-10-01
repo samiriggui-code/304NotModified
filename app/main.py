@@ -26,6 +26,7 @@ from .resolver import (
     NullResolver,
     OpenRouterResolver,
     Resolver,
+    official_source_count,
 )
 from .store import CachedAnswer, Store
 
@@ -534,14 +535,22 @@ def create_app(store: Store | None = None, resolver: Resolver | None = None) -> 
 
 
 def _payload(a: CachedAnswer, *, cached: bool, request_id: str) -> dict:
+    official = official_source_count(a.domain, a.sources)
+    confidence = a.confidence
+    if official == 0:
+        # Même règle qu'à la recherche, appliquée aussi aux réponses déjà en mémoire avant son ajout.
+        confidence = min(confidence, config.NO_OFFICIAL_SOURCE_MAX_CONFIDENCE)
     return {
         "status": "answered",
         "request_id": request_id,
         "question": a.question,
         "answer": a.answer,
         "domain": a.domain,
-        "confidence": a.confidence,
+        "confidence": confidence,
         "sources": a.sources,
+        # Nombre de sources officielles du domaine (Légifrance, impots.gouv.fr…) ; null si le domaine n'en
+        # a pas de liste. 0 : seulement des sites tiers, à vérifier avant de s'y fier.
+        "official_sources": official,
         "cached": cached,
         "fetched_at": a.created_at,
         "expires_at": a.expires_at,

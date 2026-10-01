@@ -193,6 +193,29 @@ IDEMPOTENCY_TTL_SECONDS = int(os.environ.get("IDEMPOTENCY_TTL_SECONDS", str(24 *
 
 MAX_QUESTION_CHARS = 500
 
+# Sources officielles par domaine de spécialité (noms de domaine ; un sous-domaine compte aussi).
+# Sans au moins une source officielle, la réponse est gardée mais sa confiance est plafonnée et l'agent
+# le voit (champ official_sources = 0). Essai du 30/09/2026 : 9 réponses sur 28 ne citaient que des
+# sites de consultants ou d'éditeurs, avec une confiance de 0,82 à 0,90. Domaines sans liste (logiciel,
+# prix, actualité…) : pas de contrôle, car leurs sources officielles ne s'énumèrent pas.
+_OFFICIAL_FR_EU = ("gouv.fr", "service-public.fr", "europa.eu")
+OFFICIAL_SOURCES = {
+    "facturation": (*_OFFICIAL_FR_EU, "afnor.org", "fnfe-mpe.org", "peppol.org"),
+    "formation": (
+        *_OFFICIAL_FR_EU,
+        "francecompetences.fr",
+        "caissedesdepots.fr",
+        "cofrac.fr",
+        "centre-inffo.fr",
+    ),
+    "impots": _OFFICIAL_FR_EU,
+    "finances": (*_OFFICIAL_FR_EU, "banque-france.fr", "amf-france.org"),
+    "vie_quotidienne": (*_OFFICIAL_FR_EU, "caf.fr", "ameli.fr", "francetravail.fr", "urssaf.fr"),
+    "droit": (*_OFFICIAL_FR_EU, "conseil-constitutionnel.fr", "courdecassation.fr", "conseil-etat.fr"),
+    "reglementation": (*_OFFICIAL_FR_EU, "urssaf.fr", "cnil.fr"),
+}
+NO_OFFICIAL_SOURCE_MAX_CONFIDENCE = float(os.environ.get("NO_OFFICIAL_SOURCE_MAX_CONFIDENCE", "0.5"))
+
 # Motifs qu'un agent peut donner quand une réponse ne l'a pas aidé (API /v1/feedback et outil MCP).
 # off_topic : la réponse ne porte pas sur la question posée ; contradiction : l'agent dispose d'une
 # source qui dit autre chose. Un motif est un signal à examiner, jamais une preuve : il ne modifie

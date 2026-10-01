@@ -61,7 +61,9 @@ En-têtes facultatifs : X-Client: <nom et version de votre agent> ;
 Idempotency-Key: <identifiant unique de votre demande> (une relance avec la même valeur reçoit la
 même réponse, sans nouvelle recherche ni nouveau décompte).
 Réponse : status (answered | unanswered), request_id, answer, sources [url, title], confidence (0-1),
-domain, cached (bool), fetched_at et expires_at (horodatages Unix), billable (décomptée ou non).
+domain, cached (bool), fetched_at et expires_at (horodatages Unix), billable (décomptée ou non),
+official_sources (nombre de sources officielles du domaine : Légifrance, impots.gouv.fr… ; null si le
+domaine n'en a pas de liste ; 0 = seulement des sites tiers, confidence alors plafonnée à 0,5).
 Sans réponse : reason (search_disabled, no_reliable_answer, no_source, refused, parse_error, timeout,
 provider_error, busy, internal_error), message, retryable et retry_after (secondes). Ne relancez que
 si retryable vaut true ; les questions sans réponse ne sont jamais décomptées.
